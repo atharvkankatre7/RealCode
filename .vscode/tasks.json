@@ -1,0 +1,18 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "Run Permission Sync Tests",
+			"command": "npm run test",
+			"args": [
+				"--testFile=test-permission-system-fix.js"
+			],
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "test",
+			"isBackground": false
+		}
+	]
+}

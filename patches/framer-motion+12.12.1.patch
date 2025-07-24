@@ -1,0 +1,13 @@
+diff --git a/node_modules/framer-motion/dist/es/index.mjs b/node_modules/framer-motion/dist/es/index.mjs
+index be1bc72..3b294cc 100644
+--- a/node_modules/framer-motion/dist/es/index.mjs
++++ b/node_modules/framer-motion/dist/es/index.mjs
+@@ -34,7 +34,7 @@ export { WillChangeMotionValue } from './value/use-will-change/WillChangeMotionV
+ export { resolveMotionValue } from './value/utils/resolve-motion-value.mjs';
+ export { useReducedMotion } from './utils/reduced-motion/use-reduced-motion.mjs';
+ export { useReducedMotionConfig } from './utils/reduced-motion/use-reduced-motion-config.mjs';
+-export * from 'motion-utils';
++// Removed 'export * from 'motion-utils'' to avoid client boundary issues
+ export { MotionGlobalConfig } from 'motion-utils';
+ export { animationControls } from './animation/hooks/animation-controls.mjs';
+ export { useAnimate } from './animation/hooks/use-animate.mjs';

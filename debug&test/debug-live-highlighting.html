@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Live Highlighting - Step by Step</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .test-section h2 {
+            color: #2563eb;
+            margin-top: 0;
+        }
+        .url-box {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        .button {
+            display: inline-block;
+            background: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            margin: 5px;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        .button:hover {
+            background: #1d4ed8;
+        }
+        .button.student {
+            background: #059669;
+        }
+        .button.student:hover {
+            background: #047857;
+        }
+        .instructions {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #92400e;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 8px 0;
+        }
+        .step::before {
+            content: "✓ ";
+            color: #059669;
+            font-weight: bold;
+        }
+        .debug-section {
+            background: #f0f9ff;
+            border: 2px solid #0ea5e9;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #0c4a6e;
+        }
+        .code-block {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 14px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .status {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #065f46;
+        }
+        .error {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug Live Highlighting - Step by Step</h1>
+        
+        <div class="error">
+            <strong>⚠️ Issue:</strong> Monaco Editor selection highlighting is not working visually. 
+            Socket.IO events are working correctly, but the highlighting is not appearing in the student's editor.
+        </div>
+
+        <div class="test-section">
+            <h2>🎯 New Test Room</h2>
+            <p>Let's create a fresh test room to debug the highlighting issue step by step.</p>
+            
+            <div class="url-box">
+                <strong>Teacher URL:</strong><br>
+                http://localhost:3000/editor/debug-live-test?username=DebugTeacher&userId=teacher_debug_live_123
+            </div>
+
+            <div class="url-box">
+                <strong>Student URL:</strong><br>
+                http://localhost:3000/editor/debug-live-test?username=DebugStudent&userId=student_debug_live_456
+            </div>
+
+            <a href="http://localhost:3000/editor/debug-live-test?username=DebugTeacher&userId=teacher_debug_live_123"
+               target="_blank" class="button">Open Teacher Interface</a>
+
+            <a href="http://localhost:3000/editor/debug-live-test?username=DebugStudent&userId=student_debug_live_456"
+               target="_blank" class="button student">Open Student Interface</a>
+        </div>
+
+        <div class="debug-section">
+            <h3>🔧 Step-by-Step Debugging Process</h3>
+            
+            <h4>Step 1: Open Both Interfaces</h4>
+            <div class="step">Open teacher URL in one browser tab</div>
+            <div class="step">Open student URL in another browser tab</div>
+            <div class="step">Open browser console (F12) in both tabs</div>
+            
+            <h4>Step 2: Verify Connection</h4>
+            <div class="step">Check that both users show "Connected" status</div>
+            <div class="step">Verify teacher shows "Teacher" role badge</div>
+            <div class="step">Verify student shows "Student" role badge</div>
+            
+            <h4>Step 3: Test Teacher Selection Detection</h4>
+            <div class="step">In teacher tab, type some code in Monaco Editor</div>
+            <div class="step">Select some text in teacher's Monaco Editor</div>
+            <div class="step">Check teacher console for: "📤 Teacher sending text selection to students"</div>
+            
+            <h4>Step 4: Test Student Event Reception</h4>
+            <div class="step">Check student console for: "🎨 Teacher DebugTeacher highlighted text"</div>
+            <div class="step">Look for debug info showing editor availability</div>
+            <div class="step">Check if Monaco Range is created successfully</div>
+            
+            <h4>Step 5: Test Manual Highlighting</h4>
+            <div class="step">In student console, run: <code>window.testManualHighlight()</code></div>
+            <div class="step">This should create a blue highlight on line 1</div>
+            <div class="step">If this works, the issue is with event handling</div>
+            <div class="step">If this doesn't work, the issue is with Monaco decorations</div>
+        </div>
+
+        <div class="debug-section">
+            <h3>🧪 Console Commands for Testing</h3>
+            
+            <h4>In Student Console:</h4>
+            <div class="code-block">// Test manual highlighting
+window.testManualHighlight()
+
+// Check editor state
+console.log('Editor available:', !!window.monaco)
+console.log('Editor ref:', window.editorRef)
+
+// Check CSS classes
+document.querySelectorAll('.teacher-text-highlight, .teacher-highlight')
+
+// Force apply test decoration
+if (window.monaco && window.editorRef?.current) {
+  const editor = window.editorRef.current;
+  const range = new monaco.Range(1, 1, 1, 10);
+  const decorations = editor.deltaDecorations([], [{
+    range: range,
+    options: {
+      className: 'teacher-text-highlight',
+      hoverMessage: { value: 'Test decoration' }
+    }
+  }]);
+  console.log('Test decorations applied:', decorations);
+}</div>
+
+            <h4>In Teacher Console:</h4>
+            <div class="code-block">// Check if selection events are being triggered
+// (Select some text in Monaco Editor and watch console)
+
+// Manually trigger selection event
+const socketService = window.SocketService?.getInstance();
+if (socketService) {
+  socketService.sendTeacherTextHighlight('debug-live-test', {
+    startLineNumber: 1,
+    startColumn: 1,
+    endLineNumber: 1,
+    endColumn: 10
+  });
+  console.log('Manual selection event sent');
+}</div>
+        </div>
+
+        <div class="debug-section">
+            <h3>🎯 Expected vs Actual Behavior</h3>
+            
+            <h4>Expected Behavior:</h4>
+            <ul>
+                <li>Teacher selects text → Console shows "📤 Teacher sending text selection"</li>
+                <li>Student receives event → Console shows "🎨 Teacher highlighted text"</li>
+                <li>Student Monaco Editor → Blue highlighting appears on selected text</li>
+                <li>Teacher deselects → Student highlighting disappears</li>
+            </ul>
+            
+            <h4>Actual Behavior (Issue):</h4>
+            <ul>
+                <li>✅ Teacher selection detection works</li>
+                <li>✅ Socket.IO events are sent and received</li>
+                <li>✅ Student event handlers are called</li>
+                <li>❌ Blue highlighting does not appear in student Monaco Editor</li>
+            </ul>
+        </div>
+
+        <div class="debug-section">
+            <h3>🔍 Potential Issues to Check</h3>
+            
+            <ul>
+                <li><strong>CSS Class Not Applied:</strong> Check if .teacher-text-highlight class is being added to DOM</li>
+                <li><strong>CSS Styles Not Visible:</strong> Check if CSS styles are being overridden</li>
+                <li><strong>Monaco Decorations Not Working:</strong> Check if deltaDecorations is returning valid IDs</li>
+                <li><strong>Range Issues:</strong> Check if Monaco Range is valid for the current editor content</li>
+                <li><strong>Timing Issues:</strong> Check if editor is ready when decorations are applied</li>
+                <li><strong>Z-index Issues:</strong> Check if highlighting is behind other elements</li>
+            </ul>
+        </div>
+
+        <div class="status">
+            <strong>🚀 Ready for Live Debugging!</strong> 
+            Follow the step-by-step process above to identify exactly where the highlighting breaks down.
+            Use the console commands to test each component individually.
+        </div>
+    </div>
+
+    <script>
+        // Auto-refresh status every 30 seconds
+        setInterval(() => {
+            console.log('Debug live highlighting page is active');
+        }, 30000);
+        
+        // Add timestamp to page
+        document.addEventListener('DOMContentLoaded', () => {
+            const timestamp = new Date().toLocaleString();
+            const statusDiv = document.querySelector('.status');
+            if (statusDiv) {
+                statusDiv.innerHTML += `<br><small>Page loaded at: ${timestamp}</small>`;
+            }
+        });
+    </script>
+</body>
+</html>

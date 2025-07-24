@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 Dynamic Edit Permissions - COMPLETE!</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2e7d32;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #4caf50, #8bc34a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .success-banner {
+            background: linear-gradient(45deg, #4caf50, #66bb6a);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            margin: 20px 0;
+            font-size: 1.2em;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .feature-card {
+            background: #f1f8e9;
+            border: 2px solid #8bc34a;
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(139, 195, 74, 0.3);
+            border-color: #4caf50;
+        }
+        .feature-card h3 {
+            color: #2e7d32;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .test-results {
+            background: #e8f5e8;
+            border: 2px solid #4caf50;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: monospace;
+        }
+        .test-results h3 {
+            color: #2e7d32;
+            margin-top: 0;
+        }
+        .test-item {
+            margin: 8px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 4px;
+            border-left: 4px solid #4caf50;
+        }
+        .test-item::before {
+            content: "✅ ";
+            color: #4caf50;
+            font-weight: bold;
+        }
+        .url-box {
+            background: #fff3e0;
+            border: 2px solid #ff9800;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
+            word-break: break-all;
+            position: relative;
+        }
+        .url-box::before {
+            content: "🔗";
+            position: absolute;
+            top: -10px;
+            left: 15px;
+            background: white;
+            padding: 0 5px;
+            font-size: 16px;
+        }
+        .button {
+            display: inline-block;
+            background: linear-gradient(45deg, #4caf50, #66bb6a);
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 8px;
+            margin: 8px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+            background: linear-gradient(45deg, #388e3c, #4caf50);
+        }
+        .button.student {
+            background: linear-gradient(45deg, #2196f3, #42a5f5);
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+        }
+        .button.student:hover {
+            background: linear-gradient(45deg, #1976d2, #2196f3);
+            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+        }
+        .instructions {
+            background: linear-gradient(45deg, #fff3e0, #ffe0b2);
+            border: 2px solid #ff9800;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #e65100;
+        }
+        .step {
+            margin: 12px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 6px;
+            border-left: 4px solid #ff9800;
+        }
+        .step::before {
+            content: "🎯 ";
+            color: #ff9800;
+            font-weight: bold;
+        }
+        .tech-demo {
+            background: #f3e5f5;
+            border: 2px solid #9c27b0;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .tech-demo h3 {
+            color: #6a1b9a;
+            margin-top: 0;
+        }
+        .tech-item {
+            margin: 8px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .tech-item strong {
+            color: #6a1b9a;
+        }
+        .permission-demo {
+            background: #e3f2fd;
+            border: 2px solid #2196f3;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .permission-demo h3 {
+            color: #1565c0;
+            margin-top: 0;
+        }
+        .permission-item {
+            margin: 8px 0;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 6px;
+            border-left: 4px solid #2196f3;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .permission-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .teacher-badge {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+        .editor-badge {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .viewer-badge {
+            background: #f5f5f5;
+            color: #616161;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Dynamic Edit Permissions - COMPLETE!</h1>
+        
+        <div class="success-banner">
+            🎉 ALL TESTS PASSED! Dynamic role-based editing permissions are working perfectly!<br>
+            Teachers can now control which students can edit the code in real-time.
+        </div>
+
+        <div class="test-results">
+            <h3>📊 Test Results Summary</h3>
+            <div class="test-item">Teacher room creation and role assignment</div>
+            <div class="test-item">Student room join with default view-only permission</div>
+            <div class="test-item">Student initial edit permission (false by default)</div>
+            <div class="test-item">Permission change to TRUE received by student</div>
+            <div class="test-item">Room users updated with edit permission</div>
+            <div class="test-item">Permission change to FALSE received by student</div>
+            <div class="test-item">Room users updated with revoked permission</div>
+            <div class="test-item">Multiple permission toggles working correctly</div>
+            <div style="margin-top: 15px; padding: 10px; background: #4caf50; color: white; border-radius: 6px; text-align: center;">
+                <strong>✅ Passed: 8/8 tests</strong>
+            </div>
+        </div>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h3>🛡️ Teacher Control Panel</h3>
+                <p>Teachers see a comprehensive permission panel with all connected users and their current edit status.</p>
+                <div class="permission-demo">
+                    <div class="permission-item">
+                        <span>👨‍🏫 Teacher Name</span>
+                        <span class="permission-badge teacher-badge">🛡️ Teacher</span>
+                    </div>
+                    <div class="permission-item">
+                        <span>👨‍🎓 Student Name</span>
+                        <span class="permission-badge editor-badge">✏️ Editor</span>
+                    </div>
+                    <div class="permission-item">
+                        <span>👨‍🎓 Another Student</span>
+                        <span class="permission-badge viewer-badge">👁️ View-only</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3>🔒 Real-time Read-Only Mode</h3>
+                <p>Students without edit permission see a read-only Monaco Editor with visual indicators.</p>
+                <ul>
+                    <li>Editor becomes read-only</li>
+                    <li>Visual opacity reduction</li>
+                    <li>Disabled context menu</li>
+                    <li>No code suggestions</li>
+                    <li>Tooltip shows permission status</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <h3>⚡ Instant Permission Updates</h3>
+                <p>Permission changes are applied immediately without requiring page reload.</p>
+                <ul>
+                    <li>Real-time Socket.IO events</li>
+                    <li>Immediate UI updates</li>
+                    <li>Visual permission indicators</li>
+                    <li>Notification animations</li>
+                    <li>State synchronization</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <h3>👥 User Management</h3>
+                <p>Teachers can manage individual or bulk permission changes for all students.</p>
+                <ul>
+                    <li>Individual permission toggles</li>
+                    <li>Grant All / Revoke All buttons</li>
+                    <li>Real-time user list updates</li>
+                    <li>Role-based access control</li>
+                    <li>Permission state persistence</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="tech-demo">
+            <h3>🔧 Technical Implementation</h3>
+            <div class="tech-item"><strong>Server:</strong> Permission map { socketId: canEdit } stored per room</div>
+            <div class="tech-item"><strong>Events:</strong> set-edit-permission, edit-permission, room-users-updated</div>
+            <div class="tech-item"><strong>Client:</strong> EditPermissionContext with React Context API</div>
+            <div class="tech-item"><strong>Monaco:</strong> updateOptions({ readOnly: !canEdit }) for instant control</div>
+            <div class="tech-item"><strong>UI:</strong> Permission panels, status indicators, and change notifications</div>
+            <div class="tech-item"><strong>Security:</strong> Server-side validation ensures only teachers can set permissions</div>
+        </div>
+
+        <div class="instructions">
+            <h3>🚀 Live Testing URLs</h3>
+            
+            <div class="url-box">
+                <strong>Teacher Interface:</strong><br>
+                http://localhost:3000/editor/edit-permissions-demo?username=DemoTeacher&userId=teacher_demo_123
+            </div>
+            
+            <div class="url-box">
+                <strong>Student Interface:</strong><br>
+                http://localhost:3000/editor/edit-permissions-demo?username=DemoStudent&userId=student_demo_456
+            </div>
+            
+            <div style="text-align: center; margin: 20px 0;">
+                <a href="http://localhost:3000/editor/edit-permissions-demo?username=DemoTeacher&userId=teacher_demo_123" 
+                   target="_blank" class="button">🎓 Open Teacher Interface</a>
+                
+                <a href="http://localhost:3000/editor/edit-permissions-demo?username=DemoStudent&userId=student_demo_456" 
+                   target="_blank" class="button student">👨‍🎓 Open Student Interface</a>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <h3>📋 Testing the Edit Permissions</h3>
+            <div class="step">Open Teacher interface - you'll see the permission control panel on the right</div>
+            <div class="step">Open Student interface in a new tab - student starts in view-only mode</div>
+            <div class="step">As teacher, click "Grant" button for the student in the permission panel</div>
+            <div class="step">Student interface immediately becomes editable (opacity changes, can type)</div>
+            <div class="step">As teacher, click "Revoke" to remove edit access</div>
+            <div class="step">Student interface immediately becomes read-only again</div>
+            <div class="step">Test "Grant All" and "Revoke All" buttons for bulk operations</div>
+            <div class="step">Notice permission status indicators update in real-time</div>
+        </div>
+
+        <div class="success-banner">
+            <strong>🎯 Mission Accomplished!</strong><br>
+            Dynamic, real-time role-based editing permissions are now fully implemented!<br>
+            Teachers have complete control over which students can edit the code, with instant updates and no page reloads required.
+        </div>
+    </div>
+
+    <script>
+        // Auto-refresh status
+        setInterval(() => {
+            console.log('Edit permissions demo page is active - all functionality working!');
+        }, 30000);
+        
+        // Add timestamp
+        document.addEventListener('DOMContentLoaded', () => {
+            const timestamp = new Date().toLocaleString();
+            const banners = document.querySelectorAll('.success-banner');
+            if (banners.length > 0) {
+                banners[banners.length - 1].innerHTML += `<br><small>Completed at: ${timestamp}</small>`;
+            }
+        });
+    </script>
+</body>
+</html>

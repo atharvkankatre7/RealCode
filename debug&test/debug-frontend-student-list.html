@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Student List Debug</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .info { background: #d1ecf1; border-color: #bee5eb; color: #0c5460; }
+        .warning { background: #fff3cd; border-color: #ffeaa7; color: #856404; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .student-list { margin: 10px 0; }
+        .student-item { padding: 8px; margin: 4px 0; background: #f8f9fa; border-radius: 4px; border-left: 4px solid #007bff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Frontend Student List Debug Tool</h1>
+        <p>This tool simulates the frontend React context behavior to debug student list issues.</p>
+
+        <div class="debug-section info">
+            <h3>📡 Connection Status</h3>
+            <div id="connection-status">Disconnected</div>
+            <button class="btn-primary" onclick="connectAsTeacher()">Connect as Teacher</button>
+            <button class="btn-success" onclick="connectAsStudent()">Connect as Student</button>
+        </div>
+
+        <div class="debug-section">
+            <h3>🎯 Current State</h3>
+            <div><strong>Role:</strong> <span id="current-role">None</span></div>
+            <div><strong>Room ID:</strong> <span id="current-room">None</span></div>
+            <div><strong>Socket ID:</strong> <span id="socket-id">None</span></div>
+            <div><strong>Students Count:</strong> <span id="students-count">0</span></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>👥 Student List (React State Simulation)</h3>
+            <div id="student-list" class="student-list">
+                <div class="student-item">No students yet</div>
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <h3>📋 Event Log</h3>
+            <button class="btn-danger" onclick="clearLog()">Clear Log</button>
+            <pre id="event-log">Waiting for events...</pre>
+        </div>
+
+        <div class="debug-section">
+            <h3>🔧 Manual Actions</h3>
+            <button class="btn-primary" onclick="requestStudentList()">Request Student List</button>
+            <button class="btn-success" onclick="simulateStudentJoin()">Simulate Student Join</button>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        let currentRole = null;
+        let currentRoom = null;
+        let studentsState = []; // Simulates React state
+        let eventLog = [];
+
+        // Simulate React state setter
+        function setStudents(newStudents) {
+            console.log('🔄 setStudents called with:', newStudents);
+            studentsState = Array.isArray(newStudents) ? [...newStudents] : [];
+            updateUI();
+            logEvent('STATE_UPDATE', `Students state updated: ${studentsState.length} students`);
+        }
+
+        function logEvent(type, message, data = null) {
+            const timestamp = new Date().toISOString();
+            const logEntry = { timestamp, type, message, data };
+            eventLog.push(logEntry);
+            
+            console.log(`[${type}] ${message}`, data || '');
+            
+            // Update UI
+            const logElement = document.getElementById('event-log');
+            logElement.textContent = eventLog.map(entry => 
+                `[${entry.timestamp}] ${entry.type}: ${entry.message}${entry.data ? '\n' + JSON.stringify(entry.data, null, 2) : ''}`
+            ).join('\n\n');
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function updateUI() {
+            document.getElementById('current-role').textContent = currentRole || 'None';
+            document.getElementById('current-room').textContent = currentRoom || 'None';
+            document.getElementById('socket-id').textContent = socket?.id || 'None';
+            document.getElementById('students-count').textContent = studentsState.length;
+            
+            const studentListElement = document.getElementById('student-list');
+            if (studentsState.length === 0) {
+                studentListElement.innerHTML = '<div class="student-item">No students yet</div>';
+            } else {
+                studentListElement.innerHTML = studentsState.map(student => 
+                    `<div class="student-item">
+                        <strong>${student.username}</strong> (${student.userId})
+                        <br>Socket: ${student.socketId}
+                        <br>Can Edit: ${student.canEdit}
+                    </div>`
+                ).join('');
+            }
+        }
+
+        function connectAsTeacher() {
+            if (socket) socket.disconnect();
+            
+            currentRole = 'teacher';
+            currentRoom = 'debug-frontend-' + Date.now();
+            
+            socket = io('http://localhost:5002', { transports: ['websocket'] });
+            
+            socket.on('connect', () => {
+                document.getElementById('connection-status').textContent = 'Connected';
+                logEvent('CONNECT', 'Connected to server');
+                
+                // Create room as teacher
+                socket.emit('create-room', {
+                    roomId: currentRoom,
+                    username: 'FrontendDebugTeacher',
+                    userId: 'frontend_debug_teacher_123'
+                }, (response) => {
+                    logEvent('ROOM_CREATED', 'Room created', response);
+                    setupEventListeners();
+                });
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('connection-status').textContent = 'Disconnected';
+                logEvent('DISCONNECT', 'Disconnected from server');
+            });
+        }
+
+        function connectAsStudent() {
+            if (!currentRoom) {
+                alert('Please connect as teacher first to create a room!');
+                return;
+            }
+
+            const studentSocket = io('http://localhost:5002', { transports: ['websocket'] });
+            
+            studentSocket.on('connect', () => {
+                const studentId = 'frontend_debug_student_' + Date.now();
+                logEvent('STUDENT_CONNECT', `Student connected: ${studentSocket.id}`);
+                
+                // Join room as student
+                studentSocket.emit('join-room', {
+                    roomId: currentRoom,
+                    username: `DebugStudent_${Date.now()}`,
+                    userId: studentId
+                }, (response) => {
+                    logEvent('STUDENT_JOINED', 'Student joined room', response);
+                });
+            });
+        }
+
+        function setupEventListeners() {
+            // Simulate the exact frontend logic from EditPermissionContext
+            
+            // Listen for student list updates (EXACT COPY from frontend)
+            socket.on('update-student-list', (data) => {
+                logEvent('RECEIVED_EVENT', 'update-student-list', data);
+                
+                // EXACT COPY of frontend logic
+                console.log('Received update-student-list event:', data);
+                if (!data || !Array.isArray(data.students)) {
+                    console.warn('update-student-list event received with invalid or missing students array:', data);
+                    setStudents([]);
+                    return;
+                }
+                
+                // Log the raw students array for debugging
+                console.log('Raw students array from update-student-list:', data.students);
+                
+                // Defensive: filter out any object with role==='teacher', otherwise accept as student
+                const filtered = data.students.filter(s => {
+                    const isStudent = typeof s === 'object' && s !== null && (!('role' in s) || s.role !== 'teacher');
+                    if (!isStudent) {
+                        console.warn('Filtered out non-student from update-student-list:', s);
+                    }
+                    return isStudent;
+                });
+                
+                console.log('Filtered students array for setStudents:', filtered);
+                setStudents(filtered);
+            });
+
+            // Listen for room users updates
+            socket.on('room-users-updated', (data) => {
+                logEvent('RECEIVED_EVENT', 'room-users-updated', data);
+            });
+
+            // Listen for user-joined events
+            socket.on('user-joined', (data) => {
+                logEvent('RECEIVED_EVENT', 'user-joined', data);
+                
+                // Simulate teacher requesting updated student list
+                if (currentRole === 'teacher') {
+                    logEvent('ACTION', 'Teacher detected user joined, requesting updated student list');
+                    socket.emit('request-student-list', { roomId: currentRoom });
+                }
+            });
+        }
+
+        function requestStudentList() {
+            if (!socket || !currentRoom) {
+                alert('Please connect as teacher first!');
+                return;
+            }
+            
+            logEvent('ACTION', 'Manually requesting student list');
+            socket.emit('request-student-list', { roomId: currentRoom });
+        }
+
+        function simulateStudentJoin() {
+            connectAsStudent();
+        }
+
+        function clearLog() {
+            eventLog = [];
+            document.getElementById('event-log').textContent = 'Log cleared...';
+        }
+
+        // Initialize UI
+        updateUI();
+    </script>
+</body>
+</html>

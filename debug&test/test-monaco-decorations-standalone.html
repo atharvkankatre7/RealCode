@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monaco Editor Decorations Test - Standalone</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        #editor {
+            width: 100%;
+            height: 400px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .button:hover {
+            background: #1d4ed8;
+        }
+        .button.clear {
+            background: #dc2626;
+        }
+        .button.clear:hover {
+            background: #b91c1c;
+        }
+        .status {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #0c4a6e;
+        }
+        
+        /* Teacher highlighting styles - exact copy from the main app */
+        .teacher-text-highlight {
+          background: rgba(59, 130, 246, 0.25) !important;
+          border: 1px solid rgba(59, 130, 246, 0.6) !important;
+          border-radius: 3px !important;
+          box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3) !important;
+          animation: teacherHighlightPulse 2s ease-in-out infinite;
+          position: relative !important;
+          z-index: 10 !important;
+        }
+        
+        .teacher-highlight {
+          background: rgba(59, 130, 246, 0.25) !important;
+          border: 1px solid rgba(59, 130, 246, 0.6) !important;
+          border-radius: 3px !important;
+          box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3) !important;
+          animation: teacherHighlightPulse 2s ease-in-out infinite;
+          position: relative !important;
+          z-index: 10 !important;
+        }
+        
+        @keyframes teacherHighlightPulse {
+          0% {
+            background: rgba(59, 130, 246, 0.4) !important;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5) !important;
+          }
+          100% {
+            background: rgba(59, 130, 246, 0.25) !important;
+            box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3) !important;
+          }
+        }
+        
+        /* Monaco Editor specific overrides */
+        .monaco-editor .view-lines .view-line .teacher-text-highlight,
+        .monaco-editor .view-lines .view-line .teacher-highlight,
+        .monaco-editor .teacher-text-highlight,
+        .monaco-editor .teacher-highlight {
+          background: rgba(59, 130, 246, 0.35) !important;
+          border: 2px solid rgba(59, 130, 246, 0.7) !important;
+          border-radius: 4px !important;
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4) !important;
+          animation: teacherHighlightPulse 2s ease-in-out infinite;
+          position: relative !important;
+          z-index: 1000 !important;
+        }
+        
+        .test-highlight {
+          background: rgba(255, 0, 0, 0.3) !important;
+          border: 2px solid red !important;
+          border-radius: 4px !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Monaco Editor Decorations Test - Standalone</h1>
+        
+        <div class="status">
+            <strong>Purpose:</strong> Test if Monaco Editor decorations work with teacher highlighting CSS classes in isolation.
+        </div>
+
+        <div id="editor"></div>
+
+        <div class="controls">
+            <button class="button" onclick="testTeacherHighlight()">Test Teacher Highlight</button>
+            <button class="button" onclick="testMultipleHighlights()">Test Multiple Highlights</button>
+            <button class="button" onclick="testRedHighlight()">Test Red Highlight (Control)</button>
+            <button class="button" onclick="inspectDecorations()">Inspect Decorations</button>
+            <button class="button clear" onclick="clearAllHighlights()">Clear All Highlights</button>
+        </div>
+
+        <div class="status" id="status">
+            Ready to test Monaco Editor decorations...
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    <script>
+        let editor;
+        let decorations = [];
+
+        require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@0.45.0/min/vs' } });
+
+        require(['vs/editor/editor.main'], function () {
+            editor = monaco.editor.create(document.getElementById('editor'), {
+                value: `// Monaco Editor Decorations Test
+function testFunction() {
+    console.log("Testing teacher text highlighting");
+    const variable = "This is a test variable";
+    
+    // This is a comment that spans
+    // multiple lines for testing
+    // multi-line highlighting
+    
+    return variable;
+}
+
+// More code for testing
+const anotherVariable = "Another test";
+console.log(anotherVariable);
+
+// Additional lines for testing
+for (let i = 0; i < 10; i++) {
+    console.log("Line " + i);
+}`,
+                language: 'javascript',
+                theme: 'vs-dark',
+                automaticLayout: true,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                fontSize: 14,
+                lineNumbers: 'on',
+                renderWhitespace: 'selection'
+            });
+
+            updateStatus('Monaco Editor loaded successfully! Ready to test decorations.');
+        });
+
+        function updateStatus(message) {
+            document.getElementById('status').innerHTML = `<strong>Status:</strong> ${message}`;
+        }
+
+        function testTeacherHighlight() {
+            if (!editor) {
+                updateStatus('❌ Editor not ready');
+                return;
+            }
+
+            try {
+                const range = new monaco.Range(1, 1, 1, 30);
+                
+                decorations = editor.deltaDecorations(decorations, [
+                    {
+                        range: range,
+                        options: {
+                            className: 'teacher-text-highlight teacher-highlight',
+                            hoverMessage: { value: 'Teacher highlighted this text - should be blue!' },
+                            stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                        }
+                    }
+                ]);
+
+                updateStatus('✅ Teacher highlight applied! You should see blue highlighting on line 1.');
+                console.log('Teacher highlight decorations applied:', decorations);
+                
+                // Debug: Check DOM elements
+                setTimeout(() => {
+                    const elements = document.querySelectorAll('.teacher-text-highlight, .teacher-highlight');
+                    console.log('Found teacher highlight elements:', elements.length);
+                    elements.forEach((el, i) => {
+                        console.log(`Element ${i}:`, el, 'Computed style:', window.getComputedStyle(el).background);
+                    });
+                }, 100);
+                
+            } catch (error) {
+                updateStatus(`❌ Error applying teacher highlight: ${error.message}`);
+                console.error('Teacher highlight error:', error);
+            }
+        }
+
+        function testMultipleHighlights() {
+            if (!editor) {
+                updateStatus('❌ Editor not ready');
+                return;
+            }
+
+            try {
+                const highlights = [
+                    {
+                        range: new monaco.Range(2, 1, 2, 25),
+                        options: {
+                            className: 'teacher-text-highlight',
+                            hoverMessage: { value: 'Teacher highlighted function declaration' },
+                            stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                        }
+                    },
+                    {
+                        range: new monaco.Range(4, 5, 4, 40),
+                        options: {
+                            className: 'teacher-highlight',
+                            hoverMessage: { value: 'Teacher highlighted variable declaration' },
+                            stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                        }
+                    },
+                    {
+                        range: new monaco.Range(13, 1, 13, 35),
+                        options: {
+                            className: 'teacher-text-highlight teacher-highlight',
+                            hoverMessage: { value: 'Teacher highlighted another variable' },
+                            stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                        }
+                    }
+                ];
+                
+                decorations = editor.deltaDecorations(decorations, highlights);
+
+                updateStatus('✅ Multiple teacher highlights applied! You should see blue highlighting on lines 2, 4, and 13.');
+                console.log('Multiple decorations applied:', decorations);
+            } catch (error) {
+                updateStatus(`❌ Error applying multiple highlights: ${error.message}`);
+                console.error('Multiple highlights error:', error);
+            }
+        }
+
+        function testRedHighlight() {
+            if (!editor) {
+                updateStatus('❌ Editor not ready');
+                return;
+            }
+
+            try {
+                const range = new monaco.Range(6, 1, 8, 30);
+                
+                decorations = editor.deltaDecorations(decorations, [
+                    {
+                        range: range,
+                        options: {
+                            className: 'test-highlight',
+                            hoverMessage: { value: 'Red test highlight - control test' },
+                            stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                        }
+                    }
+                ]);
+
+                updateStatus('✅ Red highlight applied! You should see red highlighting on lines 6-8.');
+                console.log('Red highlight decorations applied:', decorations);
+            } catch (error) {
+                updateStatus(`❌ Error applying red highlight: ${error.message}`);
+                console.error('Red highlight error:', error);
+            }
+        }
+
+        function inspectDecorations() {
+            if (!editor) {
+                updateStatus('❌ Editor not ready');
+                return;
+            }
+
+            try {
+                const model = editor.getModel();
+                const allDecorations = model.getAllDecorations();
+                
+                console.log('=== DECORATION INSPECTION ===');
+                console.log('Total decorations in model:', allDecorations.length);
+                console.log('Current decoration IDs:', decorations);
+                
+                allDecorations.forEach((decoration, index) => {
+                    console.log(`Decoration ${index}:`, {
+                        id: decoration.id,
+                        range: decoration.range,
+                        options: decoration.options,
+                        className: decoration.options.className
+                    });
+                });
+                
+                // Check DOM elements
+                const teacherElements = document.querySelectorAll('.teacher-text-highlight, .teacher-highlight');
+                const testElements = document.querySelectorAll('.test-highlight');
+                
+                console.log('Teacher highlight elements in DOM:', teacherElements.length);
+                console.log('Test highlight elements in DOM:', testElements.length);
+                
+                updateStatus(`✅ Inspection complete! Found ${allDecorations.length} decorations in model, ${teacherElements.length} teacher elements, ${testElements.length} test elements in DOM.`);
+                
+            } catch (error) {
+                updateStatus(`❌ Error inspecting decorations: ${error.message}`);
+                console.error('Inspection error:', error);
+            }
+        }
+
+        function clearAllHighlights() {
+            if (!editor) {
+                updateStatus('❌ Editor not ready');
+                return;
+            }
+
+            try {
+                decorations = editor.deltaDecorations(decorations, []);
+                updateStatus('✅ All highlights cleared!');
+                console.log('All decorations cleared');
+            } catch (error) {
+                updateStatus(`❌ Error clearing highlights: ${error.message}`);
+                console.error('Clear highlights error:', error);
+            }
+        }
+
+        // Auto-test on load
+        setTimeout(() => {
+            if (editor) {
+                updateStatus('🎯 Auto-testing teacher highlight in 2 seconds...');
+                setTimeout(() => {
+                    testTeacherHighlight();
+                }, 2000);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

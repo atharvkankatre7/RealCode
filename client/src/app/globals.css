@@ -1,0 +1,468 @@
+@import "tailwindcss";
+@import "../styles/editor-permissions.css";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --primary: #3b82f6;
+  --secondary: #10b981;
+  --accent: #8b5cf6;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --card-bg: #f9fafb;
+  --card-border: #e5e7eb;
+
+  /* Animation variables */
+  --transition-fast: 0.15s;
+  --transition-normal: 0.3s;
+  --transition-slow: 0.5s;
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-bounce: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --card-bg: #1f2937;
+    --card-border: #374151;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+}
+
+html, body, #__next {
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Base component styles with animations */
+.input {
+  @apply px-4 py-2 rounded-md border w-full max-w-md;
+  transition: border-color var(--transition-fast) var(--ease-in-out), box-shadow var(--transition-fast) var(--ease-in-out);
+}
+
+.input:focus {
+  @apply outline-none border-blue-500 ring-2 ring-blue-200;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.btn {
+  @apply px-6 py-2 rounded-md font-medium relative overflow-hidden;
+  transition: all var(--transition-normal) var(--ease-out);
+  background: var(--primary);
+  color: white;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.4);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+/* Animation utility classes */
+.fade-in {
+  animation: fadeIn var(--transition-normal) var(--ease-out) forwards;
+}
+
+.slide-up {
+  animation: slideUp var(--transition-normal) var(--ease-out) forwards;
+}
+
+.slide-down {
+  animation: slideDown var(--transition-normal) var(--ease-out) forwards;
+}
+
+.slide-left {
+  animation: slideLeft var(--transition-normal) var(--ease-out) forwards;
+}
+
+.slide-right {
+  animation: slideRight var(--transition-normal) var(--ease-out) forwards;
+}
+
+.scale-in {
+  animation: scaleIn var(--transition-normal) var(--ease-bounce) forwards;
+}
+
+.bounce {
+  animation: bounce var(--transition-normal) var(--ease-bounce) infinite;
+}
+
+/* Keyframes */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideLeft {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideRight {
+  from { transform: translateX(-20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+/* Modern card component */
+.card {
+  @apply rounded-xl p-6 transition-all duration-300;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.card:hover {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  transform: translateY(-5px);
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .glass {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Drawing annotation highlight for Monaco Editor */
+.drawing-annotation {
+  background: rgba(255, 230, 0, 0.25) !important;
+  border-left: 4px solid #ffd600 !important;
+  /* You can adjust color and style as you like */
+}
+
+/* Highlighted lines in the Monaco editor */
+.monaco-selection-highlight {
+  background-color: rgba(255, 255, 0, 0.3); /* Yellow highlight */
+}
+
+/* Teacher selection highlight for students */
+.teacher-selection-highlight {
+  background: rgba(59, 130, 246, 0.2) !important; /* Blue highlight with transparency */
+  border: 1px solid rgba(59, 130, 246, 0.4) !important;
+  border-radius: 2px !important;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* Teacher selection highlight in dark mode */
+.dark .teacher-selection-highlight {
+  background: rgba(96, 165, 250, 0.15) !important;
+  border: 1px solid rgba(96, 165, 250, 0.3) !important;
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.2) !important;
+}
+
+/* Teacher cursor indicator */
+.teacher-cursor {
+  position: absolute;
+  width: 2px;
+  height: 18px;
+  background: #3b82f6;
+  border-radius: 1px;
+  z-index: 1000;
+  pointer-events: none;
+  animation: teacherCursorBlink 1s infinite;
+  box-shadow: 0 0 4px rgba(59, 130, 246, 0.5);
+}
+
+/* Teacher cursor blinking animation */
+@keyframes teacherCursorBlink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.3; }
+}
+
+/* Teacher cursor label */
+.teacher-cursor-label {
+  position: absolute;
+  top: -25px;
+  left: -10px;
+  background: #3b82f6;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1001;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Teacher cursor label arrow */
+.teacher-cursor-label::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 10px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid #3b82f6;
+}
+
+/* Teacher text selection highlight - Yellow background with orange border */
+.teacher-text-highlight {
+  background: rgba(255, 235, 59, 0.3) !important; /* Yellow background */
+  border: 2px solid rgba(255, 152, 0, 0.8) !important; /* Orange border */
+  border-radius: 4px !important;
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.4) !important;
+  animation: teacherSelectionPulse 2s ease-in-out infinite;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* Alternative class name for compatibility */
+.teacher-highlight {
+  background: rgba(255, 235, 59, 0.3) !important; /* Yellow background */
+  border: 2px solid rgba(255, 152, 0, 0.8) !important; /* Orange border */
+  border-radius: 4px !important;
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.4) !important;
+  animation: teacherSelectionPulse 2s ease-in-out infinite;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* Teacher selection highlight (for range selections) */
+.teacher-selection-highlight {
+  background: rgba(255, 235, 59, 0.3) !important; /* Yellow background */
+  border: 2px solid rgba(255, 152, 0, 0.8) !important; /* Orange border */
+  border-radius: 4px !important;
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.4) !important;
+  animation: teacherSelectionPulse 2s ease-in-out infinite;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* Teacher selection highlight animation - Yellow/Orange theme */
+@keyframes teacherSelectionPulse {
+  0% {
+    background: rgba(255, 235, 59, 0.4) !important; /* Brighter yellow */
+    box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.6) !important; /* Stronger orange glow */
+  }
+  100% {
+    background: rgba(255, 235, 59, 0.3) !important; /* Normal yellow */
+    box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.4) !important; /* Normal orange glow */
+  }
+}
+
+/* Teacher cursor styles - Blinking orange cursor */
+.teacher-cursor {
+  position: absolute !important;
+  width: 2px !important;
+  height: 18px !important;
+  background: rgba(255, 152, 0, 0.9) !important; /* Orange cursor */
+  border-radius: 1px !important;
+  animation: teacherCursorBlink 1s ease-in-out infinite;
+  z-index: 1000 !important;
+  pointer-events: none !important;
+}
+
+@keyframes teacherCursorBlink {
+  0%, 50% {
+    opacity: 1;
+    background: rgba(255, 152, 0, 0.9) !important;
+    box-shadow: 0 0 4px rgba(255, 152, 0, 0.6) !important;
+  }
+  51%, 100% {
+    opacity: 0.3;
+    background: rgba(255, 152, 0, 0.5) !important;
+    box-shadow: 0 0 2px rgba(255, 152, 0, 0.3) !important;
+  }
+}
+
+/* Teacher cursor label */
+.teacher-cursor-label {
+  position: absolute !important;
+  top: -25px !important;
+  left: -10px !important;
+  background: rgba(255, 152, 0, 0.9) !important; /* Orange background */
+  color: white !important;
+  padding: 2px 6px !important;
+  border-radius: 3px !important;
+  font-size: 11px !important;
+  font-weight: bold !important;
+  white-space: nowrap !important;
+  z-index: 1001 !important;
+  pointer-events: none !important;
+}
+
+.teacher-cursor-label::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 10px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid rgba(255, 152, 0, 0.9); /* Orange arrow */
+}
+
+/* Teacher highlighting in dark mode - Adjusted yellow/orange for dark backgrounds */
+.dark .teacher-text-highlight {
+  background: rgba(255, 235, 59, 0.25) !important; /* Slightly dimmed yellow for dark mode */
+  border: 2px solid rgba(255, 152, 0, 0.7) !important; /* Orange border */
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.4) !important;
+}
+
+.dark .teacher-highlight {
+  background: rgba(255, 235, 59, 0.25) !important; /* Slightly dimmed yellow for dark mode */
+  border: 2px solid rgba(255, 152, 0, 0.7) !important; /* Orange border */
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.4) !important;
+}
+
+.dark .teacher-selection-highlight {
+  background: rgba(255, 235, 59, 0.25) !important; /* Slightly dimmed yellow for dark mode */
+  border: 2px solid rgba(255, 152, 0, 0.7) !important; /* Orange border */
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.4) !important;
+}
+
+/* Inline class fallback for teacher highlighting */
+.teacher-highlight-inline {
+  background: rgba(255, 235, 59, 0.3) !important; /* Yellow background */
+  border: 2px solid rgba(255, 152, 0, 0.8) !important; /* Orange border */
+  border-radius: 4px !important;
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.4) !important;
+}
+
+.dark .teacher-highlight-inline {
+  background: rgba(255, 235, 59, 0.25) !important; /* Dimmed yellow for dark mode */
+  border: 2px solid rgba(255, 152, 0, 0.7) !important; /* Orange border */
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.4) !important;
+}
+
+/* Monaco Editor specific overrides with higher specificity - Yellow/Orange theme */
+.monaco-editor .view-lines .view-line .teacher-text-highlight,
+.monaco-editor .view-lines .view-line .teacher-highlight,
+.monaco-editor .view-lines .view-line .teacher-selection-highlight,
+.monaco-editor .teacher-text-highlight,
+.monaco-editor .teacher-highlight,
+.monaco-editor .teacher-selection-highlight {
+  background: rgba(255, 235, 59, 0.35) !important; /* Yellow background */
+  border: 2px solid rgba(255, 152, 0, 0.8) !important; /* Orange border */
+  border-radius: 4px !important;
+  box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.5) !important; /* Orange glow */
+  animation: teacherSelectionPulse 2s ease-in-out infinite;
+  position: relative !important;
+  z-index: 1000 !important;
+}
+
+.dark .monaco-editor .view-lines .view-line .teacher-text-highlight,
+.dark .monaco-editor .view-lines .view-line .teacher-highlight,
+.dark .monaco-editor .teacher-text-highlight,
+.dark .monaco-editor .teacher-highlight {
+  background: rgba(96, 165, 250, 0.3) !important;
+  border: 2px solid rgba(96, 165, 250, 0.6) !important;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.35) !important;
+}
+
+/* Force visibility with very high specificity */
+.monaco-editor .view-overlay .teacher-text-highlight,
+.monaco-editor .view-overlay .teacher-highlight {
+  background: rgba(59, 130, 246, 0.35) !important;
+  border: 2px solid rgba(59, 130, 246, 0.7) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4) !important;
+  position: absolute !important;
+  z-index: 1000 !important;
+  pointer-events: none !important;
+}
+
+/* Fallback with inline styles */
+[style*="teacher-text-highlight"],
+[style*="teacher-highlight"] {
+  background: rgba(59, 130, 246, 0.35) !important;
+  border: 2px solid rgba(59, 130, 246, 0.7) !important;
+  border-radius: 4px !important;
+}
+
+/* Dark mode teacher cursor */
+.dark .teacher-cursor {
+  background: #60a5fa;
+  box-shadow: 0 0 4px rgba(96, 165, 250, 0.5);
+}
+
+.dark .teacher-cursor-label {
+  background: #60a5fa;
+}
+
+.dark .teacher-cursor-label::after {
+  border-top-color: #60a5fa;
+}
+
+/* Lines with inline comments */
+.monaco-line-has-comment {
+  position: relative;
+}
+
+/* Inline comment bubble */
+.monaco-line-has-comment::after {
+  content: attr(data-comment);
+  position: absolute;
+  right: 0;
+  top: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 10;
+}
+
+/* Custom zinc-750 color for Teacher Control Panel */
+.bg-zinc-750 {
+  background-color: rgb(63 63 70 / 1); /* Between zinc-700 and zinc-800 */
+}
+
+.hover\:bg-zinc-750:hover {
+  background-color: rgb(63 63 70 / 1);
+}

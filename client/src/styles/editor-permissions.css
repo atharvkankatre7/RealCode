@@ -1,0 +1,206 @@
+/* Editor Permission Styles */
+
+/* Read-only editor styling */
+.read-only-editor {
+  position: relative;
+}
+
+.read-only-editor::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.05);
+  pointer-events: none;
+  z-index: 1;
+  border-radius: 8px;
+}
+
+.read-only-editor .monaco-editor {
+  opacity: 0.8;
+}
+
+.read-only-editor .monaco-editor .view-lines {
+  cursor: not-allowed !important;
+}
+
+/* Permission badge animations */
+.permission-badge-enter {
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.permission-badge-enter-active {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 300ms, transform 300ms;
+}
+
+.permission-badge-exit {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.permission-badge-exit-active {
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 300ms, transform 300ms;
+}
+
+/* Teacher control panel animations */
+.teacher-panel-slide-enter {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+.teacher-panel-slide-enter-active {
+  transform: translateX(0);
+  opacity: 1;
+  transition: transform 300ms ease-out, opacity 300ms ease-out;
+}
+
+.teacher-panel-slide-exit {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.teacher-panel-slide-exit-active {
+  transform: translateX(100%);
+  opacity: 0;
+  transition: transform 300ms ease-in, opacity 300ms ease-in;
+}
+
+/* Student list item hover effects */
+.student-item {
+  transition: all 0.2s ease;
+}
+
+.student-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Permission toggle button animations */
+.permission-toggle {
+  transition: all 0.3s ease;
+}
+
+.permission-toggle:hover {
+  transform: scale(1.05);
+}
+
+.permission-toggle:active {
+  transform: scale(0.95);
+}
+
+/* Notification animations */
+.permission-notification {
+  animation: slideInFromTop 0.3s ease-out;
+}
+
+@keyframes slideInFromTop {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Loading states */
+.permission-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.permission-loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .teacher-control-panel {
+    width: 100%;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    border-radius: 16px 16px 0 0;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  
+  .editor-container {
+    padding-bottom: 200px;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .read-only-editor::before {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  .permission-notification {
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .read-only-editor {
+    border: 2px solid #ff0000;
+  }
+  
+  .permission-badge {
+    border: 2px solid currentColor;
+    font-weight: bold;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .permission-badge-enter-active,
+  .permission-badge-exit-active,
+  .teacher-panel-slide-enter-active,
+  .teacher-panel-slide-exit-active,
+  .student-item,
+  .permission-toggle {
+    transition: none;
+  }
+  
+  .permission-notification {
+    animation: none;
+  }
+  
+  .permission-loading::after {
+    animation: none;
+  }
+}
