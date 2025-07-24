@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useRe
 import { useSocketService } from '@/hooks/useSocketService';
 import { useAuth } from '@/context/AuthContext';
 
+
 interface Student {
   socketId: string;
   username: string;
@@ -14,12 +15,27 @@ interface Student {
   lastActivity: string;
 }
 
+interface UpdateUserListData {
+  users: User[];
+}
+
+interface RoomPermissionChangedData {
+  canEdit?: boolean;
+  state?: { canEdit?: boolean };
+  [key: string]: any;
+}
+
 interface User {
   username: string;
   role: 'teacher' | 'student';
   socketId: string;
   userId: string;
   canEdit: boolean;
+}
+
+interface AuthUser {
+  uid?: string;
+  [key: string]: any;
 }
 
 interface EditPermissionContextType {
@@ -51,7 +67,7 @@ export function EditPermissionProvider({ children }: EditPermissionProviderProps
 
   // Use the socket service hook
   const { socketService, isReady: socketReady, isConnected } = useSocketService();
-  const { user: authUser } = useAuth ? useAuth() : { user: null };
+  const { user: authUser } = useAuth ? useAuth() as { user: AuthUser | null } : { user: null };
 
   const isTeacherRef = useRef(isTeacher);
   useEffect(() => {
@@ -123,28 +139,33 @@ export function EditPermissionProvider({ children }: EditPermissionProviderProps
   let lastPermissionTimestamp = Date.now();
 
   // --- Room permission change handler ---
-  const handleRoomPermissionChanged = (data) => {
+  const handleRoomPermissionChanged = (data: RoomPermissionChangedData) => {
     console.log('[PERM-FLOW][ROOM-PERM CHANGE EVENT] =>', data);
-    if (typeof data.canEdit === 'boolean') {
-      setCanEdit(data.canEdit); // ✅ always set
+    // Support both direct and nested canEdit
+    const canEditValue = typeof data.canEdit === 'boolean'
+      ? data.canEdit
+      : (data.state && typeof data.state.canEdit === 'boolean' ? data.state.canEdit : undefined);
+
+    if (typeof canEditValue === 'boolean') {
+      setCanEdit(canEditValue); // ✅ always set
     } else {
-      console.warn('⚠️ Invalid canEdit value:', data.canEdit);
+      console.warn('⚠️ Invalid canEdit value:', data.canEdit, data.state?.canEdit);
     }
   };
 
   // --- User list update handler ---
-  const handleUpdateUserList = (data) => {
+  const handleUpdateUserList = (data: UpdateUserListData) => {
     if (Date.now() - lastPermissionTimestamp < 200) {
       console.log('[SKIP-UPDATE] Too soon after permission event');
       return;
     }
     setUsers(data.users);
-    const sock = socketService.getSocket && socketService.getSocket();
+    const sock = socketService?.getSocket && socketService.getSocket();
     const mySocketId = sock?.id || null;
-    const authUserId = authUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('userId') : null);
+    const authUserId = (authUser && 'uid' in authUser ? authUser.uid : undefined) || (typeof window !== 'undefined' ? localStorage.getItem('userId') : null);
     let myUser = null;
-    if (mySocketId) myUser = data.users.find(u => u.socketId === mySocketId);
-    if (!myUser && authUserId) myUser = data.users.find(u => u.userId === authUserId);
+    if (mySocketId) myUser = data.users.find((u: User) => u.socketId === mySocketId);
+    if (!myUser && authUserId) myUser = data.users.find((u: User) => u.userId === authUserId);
     console.log('[PERM-FLOW] UPDATE-USER-LIST:', {
       myUser,
       isTeacherPrev: isTeacherRef.current,
@@ -163,7 +184,7 @@ export function EditPermissionProvider({ children }: EditPermissionProviderProps
     }
     // Update students for teachers
     if (myUser && myUser.role === 'teacher') {
-      const studentsFromUsers = data.users.filter((u: any) => u.role === 'student').map((u: any) => ({
+      const studentsFromUsers = data.users.filter((u: User) => u.role === 'student').map((u: User) => ({
         socketId: u.socketId,
         username: u.username,
         userId: u.userId,
@@ -176,18 +197,18 @@ export function EditPermissionProvider({ children }: EditPermissionProviderProps
   };
 
   // --- Room users updated handler ---
-  const handleRoomUsersUpdated = (data) => {
+  const handleRoomUsersUpdated = (data: UpdateUserListData) => {
     if (Date.now() - lastPermissionTimestamp < 200) {
       console.log('[SKIP-UPDATE] Too soon after permission event');
       return;
     }
     setUsers(data.users);
-    const sock = socketService.getSocket && socketService.getSocket();
+    const sock = socketService?.getSocket && socketService.getSocket();
     const mySocketId = sock?.id || null;
-    const authUserId = authUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('userId') : null);
+    const authUserId = (authUser && 'uid' in authUser ? authUser.uid : undefined) || (typeof window !== 'undefined' ? localStorage.getItem('userId') : null);
     let myUser = null;
-    if (mySocketId) myUser = data.users.find(u => u.socketId === mySocketId);
-    if (!myUser && authUserId) myUser = data.users.find(u => u.userId === authUserId);
+    if (mySocketId) myUser = data.users.find((u: User) => u.socketId === mySocketId);
+    if (!myUser && authUserId) myUser = data.users.find((u: User) => u.userId === authUserId);
     console.log('[PERM-FLOW] ROOM-USERS-UPDATED:', {
       myUser,
       isTeacherPrev: isTeacherRef.current,
@@ -206,7 +227,7 @@ export function EditPermissionProvider({ children }: EditPermissionProviderProps
     }
     // Update students for teachers
     if (myUser && myUser.role === 'teacher') {
-      const studentsFromUsers = data.users.filter((u: any) => u.role === 'student').map((u: any) => ({
+      const studentsFromUsers = data.users.filter((u: User) => u.role === 'student').map((u: User) => ({
         socketId: u.socketId,
         username: u.username,
         userId: u.userId,

@@ -9,28 +9,60 @@ interface PermissionBadgeProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg';
   showAnimation?: boolean;
+  /**
+   * Optional: increment or change this value to manually trigger animation for teachers
+   */
+  teacherActionTrigger?: number | string;
 }
 
 export default function PermissionBadge({ 
   className = '', 
   size = 'md',
-  showAnimation = true 
+  showAnimation = true,
+  teacherActionTrigger
 }: PermissionBadgeProps) {
   const { permissionBadge, canEdit, isTeacher } = useEditPermission();
   const [showChangeAnimation, setShowChangeAnimation] = React.useState(false);
   const [previousPermission, setPreviousPermission] = React.useState(canEdit);
 
-  // Trigger animation when permission changes
+
+  // Trigger animation when permission changes (students)
   React.useEffect(() => {
-    if (previousPermission !== canEdit && !isTeacher && showAnimation) {
+    if (!isTeacher && previousPermission !== canEdit && showAnimation) {
+      console.log('[PermissionBadge] Student animation triggered', { previousPermission, canEdit, showAnimation });
       setShowChangeAnimation(true);
       const timer = setTimeout(() => {
         setShowChangeAnimation(false);
-        setPreviousPermission(canEdit);
+        setPreviousPermission(canEdit); // update AFTER animation ends
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [canEdit, isTeacher, previousPermission, showAnimation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canEdit, previousPermission, showAnimation, isTeacher]);
+
+  // Manual animation trigger for teachers
+  React.useEffect(() => {
+    if (isTeacher && teacherActionTrigger !== undefined) {
+      console.log('[PermissionBadge] Teacher animation triggered', { teacherActionTrigger });
+      setShowChangeAnimation(true);
+      const timer = setTimeout(() => {
+        setShowChangeAnimation(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teacherActionTrigger, isTeacher]);
+  // Manual animation trigger for teachers
+  React.useEffect(() => {
+    if (isTeacher && teacherActionTrigger !== undefined) {
+      setShowChangeAnimation(true);
+      const timer = setTimeout(() => {
+        setShowChangeAnimation(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teacherActionTrigger, isTeacher]);
 
   const getBadgeConfig = () => {
     switch (permissionBadge) {
@@ -111,11 +143,11 @@ export default function PermissionBadge({
       <AnimatePresence>
         {showChangeAnimation && (
           <motion.div
-            initial={{ y: -50, opacity: 0, scale: 0.8 }}
+            initial={{ y: -10, opacity: 0, scale: 0.8 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: -50, opacity: 0, scale: 0.8 }}
+            exit={{ y: -10, opacity: 0, scale: 0.8 }}
             transition={{ duration: 0.3 }}
-            className="fixed top-4 right-4 z-50 max-w-sm"
+            className="relative mt-2 mb-2 max-w-sm"
           >
             <div className={`
               px-4 py-3 rounded-lg shadow-lg border-2 flex items-center space-x-3
@@ -134,7 +166,6 @@ export default function PermissionBadge({
                   <FiX className="w-4 h-4 text-red-600" />
                 )}
               </div>
-              
               <div>
                 <p className="font-medium">
                   {canEdit ? 'Edit Access Granted!' : 'Edit Access Revoked'}

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { FiEdit3, FiEye, FiUsers, FiLock, FiUnlock } from 'react-icons/fi';
+import PermissionBadge from './PermissionBadge';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEditPermission } from '@/context/EditPermissionContext';
 import { useSocketService } from '@/hooks/useSocketService';
@@ -10,6 +11,9 @@ export default function TeacherControlPanel() {
     const { isTeacher, students, canEdit, toggleRoomPermission } = useEditPermission();
     const { isReady, isConnected } = useSocketService();
     const [pending, setPending] = useState(false);
+
+    // State to trigger PermissionBadge animation for teachers
+    const [teacherActionCount, setTeacherActionCount] = useState(0);
 
     // Debug log on every render
     console.log('🚨 Button Rendered | canEdit =', canEdit);
@@ -105,6 +109,10 @@ export default function TeacherControlPanel() {
             </div>
             {/* Debug: show canEdit live */}
             <p className="text-xs text-gray-500 mt-1">canEdit: {String(canEdit)}</p>
+            {/* Teacher Permission Badge with animation */}
+            <div className="mb-4 flex justify-end">
+                <PermissionBadge teacherActionTrigger={teacherActionCount} />
+            </div>
         </div>
     );
 }

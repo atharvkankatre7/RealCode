@@ -231,11 +231,17 @@ function broadcastRoomState(io, roomId, eventType = 'room-state-update') {
   }
 
   // console.log(`📤 [ROOM_STATE] Broadcasting ${eventType} to room ${roomId}`);
-  io.to(roomId).emit(eventType, {
+  // Always include top-level canEdit for room-permission-changed events
+  const payload = {
     state,
     timestamp: new Date().toISOString(),
     eventType
-  });
+  };
+  if (eventType === 'room-permission-changed') {
+    // Try to get canEdit from state.permissions or fallback to false
+    payload.canEdit = state?.permissions?.canEdit ?? false;
+  }
+  io.to(roomId).emit(eventType, payload);
 }
 
 // --- MULTI-FILE SUPPORT: Store code per file in each room ---
