@@ -1379,22 +1379,17 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
           wordWrap: "on",
-          readOnly: !canEdit && !isTeacher,
+          readOnly: !canEdit && !isTeacher, // Only disables editing, allows scroll/select/copy
           smoothScrolling: true,
           cursorBlinking: "blink",
           contextmenu: canEdit || isTeacher,
           ...(options || {}) // Merge in options from props
         }}
       />
-      {/* Overlay for students in view-only mode */}
-      {!canEdit && !isTeacher && (
-        <div
-          className="absolute inset-0 z-30"
-          style={{ pointerEvents: 'auto', background: 'transparent', cursor: 'not-allowed' }}
-        />
-      )}
+      {/* Remove overlay for students in view-only mode to allow scroll/select/copy */}
     </div>
   );
 });
 
 export default CodeEditor;
+
