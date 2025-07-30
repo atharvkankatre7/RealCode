@@ -511,9 +511,9 @@ return (
                 />
             </div>
             {/* Main Content Area */}
-            <div className="flex flex-col lg:flex-row flex-1 w-full h-full overflow-hidden max-w-7xl mx-auto px-2 sm:px-6 gap-6 pt-4 pb-4 min-w-0">
+            <div className="flex flex-col lg:flex-row flex-1 w-full h-full overflow-hidden min-w-0 p-0 gap-0">
                 {/* Editor Area */}
-                <div className="flex-1 min-w-0 min-h-[300px] w-full h-full flex flex-col overflow-hidden bg-zinc-900/90 rounded-3xl shadow-2xl border-2 border-zinc-800 relative p-3 sm:p-6 transition-all duration-200">
+                <div className="flex-1 min-w-0 min-h-[300px] w-full h-full flex flex-col overflow-hidden bg-zinc-900/90 shadow-2xl border-2 border-zinc-800 relative p-3 sm:p-6 transition-all duration-200">
                     <div className="editor-container flex-1 min-w-0 w-full h-full flex flex-col">
                         <CodeEditor
                             ref={editorRef}
