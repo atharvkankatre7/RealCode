@@ -1,5 +1,8 @@
 // server/sockets/room.js
 
+import autoSaveService from '../services/autoSaveService.js';
+import Room from '../models/Room.js';
+
 // Simple in-memory data store for rooms
 const rooms = {};
 
@@ -552,20 +555,60 @@ export const registerRoomHandlers = (io, socket) => {
   // RBAC: Individual revoke permission removed - use toggle-room-permission
 
   // Handle real-time code changes (broadcast to all users including view-only)
-  socket.on("code-change", (data) => {
+  socket.on("code-change", async (data) => {
+    // Log the entire incoming payload for debugging
+    console.log("[SOCKET] code-change received:", data);
     const { roomId, fileId = 'main', code, userId, username, timestamp } = data;
-    if (!roomId || code === undefined) {
-      return console.error(`Invalid code-change data:`, data);
+    if (!roomId || !code) {
+      console.log("[SOCKET] Missing roomId or code.", { roomId, code });
+      return;
     }
     try {
-      const room = getRoom(roomId);
-      // --- Store code per file ---
-      if (!room.files) room.files = {};
-      room.files[fileId] = code;
-      room.lastActivity = new Date().toISOString();
-      // --- Throttle emits to avoid spam ---
+      // Attempt to update the DB and log the query and update
+      console.log("[SOCKET] Attempting DB update:", {
+        query: { roomId },
+        update: {
+          "currentCode.content": code,
+          "currentCode.lastSaved": new Date(),
+          "currentCode.lastSavedBy": userId
+        }
+      });
+      
+      // First, try to find the room to see if it exists
+      let room = await Room.findOne({ roomId });
+      
+      if (!room) {
+        // Room doesn't exist, create it
+        console.log("[SOCKET] Room not found, creating new room:", roomId);
+        room = new Room({
+          roomId,
+          createdBy: userId || 'unknown',
+          currentCode: {
+            content: code,
+            language: 'javascript', // default language
+            lastSaved: new Date(),
+            lastSavedBy: userId || 'unknown'
+          }
+        });
+        await room.save();
+        console.log("[SOCKET] New room created successfully:", roomId);
+      } else {
+        // Room exists, update it
+        console.log("[SOCKET] Room found, updating existing room:", roomId);
+        const result = await Room.findOneAndUpdate(
+          { roomId },
+          {
+            "currentCode.content": code,
+            "currentCode.lastSaved": new Date(),
+            "currentCode.lastSavedBy": userId
+          },
+          { new: true, upsert: false }
+        );
+        console.log("[SOCKET] Room updated successfully:", result ? "yes" : "no");
+      }
+      
+      // Broadcast to all other users in the room (including view-only)
       if (canEmitCodeChange(roomId, fileId)) {
-        // Broadcast to all other users in the room (including view-only)
         socket.to(roomId).emit("code-change", {
           code,
           fileId,
@@ -574,12 +617,70 @@ export const registerRoomHandlers = (io, socket) => {
           roomId,
           timestamp: timestamp || Date.now()
         });
-        // Also emit legacy code-update for backward compatibility
         socket.to(roomId).emit("code-update", { code, fileId });
-        // console.log(`Broadcasted code change for file ${fileId} in room ${roomId}`);
+      }
+    } catch (err) {
+      console.error("[SOCKET] Mongo update ERROR:", err);
+      console.error("[SOCKET] Error details:", {
+        message: err.message,
+        code: err.code,
+        name: err.name,
+        stack: err.stack
+      });
+      
+      // Check if it's a connection error
+      if (err.name === 'MongoNetworkError' || err.name === 'MongoServerSelectionError') {
+        console.error("[SOCKET] Database connection error - MongoDB may not be running");
+      }
+      
+      // Check if it's a validation error
+      if (err.name === 'ValidationError') {
+        console.error("[SOCKET] Validation error - check the data being saved");
+      }
+      
+      // Check if it's a cast error
+      if (err.name === 'CastError') {
+        console.error("[SOCKET] Cast error - check the data types being saved");
+      }
+    }
+  });
+
+  // Handle manual save (Ctrl+S)
+  socket.on("manual-save", async (data) => {
+    const { roomId, code, language, userId } = data;
+    if (!roomId || code === undefined || !userId) {
+      return console.error(`Invalid manual-save data:`, data);
+    }
+    
+    try {
+      console.log(`💾 Manual save requested for room ${roomId} by user ${userId}`);
+      
+      const result = await autoSaveService.manualSave(roomId, code, language, userId);
+      
+      if (result.success) {
+        // Notify the user that save was successful
+        socket.emit("save-status", {
+          success: true,
+          message: "Code saved successfully",
+          timestamp: new Date().toISOString()
+        });
+        console.log(`✅ Manual save completed for room ${roomId}`);
+      } else {
+        // Notify the user that save failed
+        socket.emit("save-status", {
+          success: false,
+          message: result.error || "Save failed",
+          timestamp: new Date().toISOString()
+        });
+        console.log(`❌ Manual save failed for room ${roomId}: ${result.error}`);
       }
     } catch (error) {
-      console.error(`Error handling code-change for room ${roomId}:`, error);
+      console.error(`Error handling manual-save for room ${roomId}:`, error);
+      socket.emit("save-status", {
+        success: false,
+        message: "Save failed due to server error",
+        timestamp: new Date().toISOString()
+      });
     }
   });
 
@@ -617,6 +718,12 @@ export const registerRoomHandlers = (io, socket) => {
     if (roomId) {
       const room = getRoom(roomId);
       room.users = room.users.filter((user) => user.socketId !== socket.id);
+
+      // Cleanup auto-save for this room if no users left
+      if (room.users.length === 0) {
+        autoSaveService.cleanupRoom(roomId);
+        console.log(`🧹 Cleaned up auto-save for empty room ${roomId}`);
+      }
 
       // Emit updated user list
       emitRoomUsersUpdated(io, roomId);

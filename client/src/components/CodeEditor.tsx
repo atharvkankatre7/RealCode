@@ -16,6 +16,7 @@ import { useEditPermission } from "../context/EditPermissionContext"
 import { UserInfo } from "./UserRole"
 import TeacherCursor from "./TeacherCursor"
 import UserListPanel from './UserListPanel';
+import { useAuth } from "@/context/AuthContext"
 
 interface CodeEditorProps {
   roomId: string
@@ -30,21 +31,28 @@ export interface CodeEditorRef {
   copyCode: () => void;
   formatCurrentCode: () => void;
   setLanguage: (lang: string) => void;
+  getValue: () => string;
+  saveCode: () => void;
 }
 
 const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, username: initialUsername, onExecutionResult, onActiveUsersChange, options }, ref) => {
-  const { isConnected } = useSocket()
   const {
-    isConnected: socketConnected,
+    socket,
+    isConnected,
     isReady: socketReady,
     roomState,
     requestRoomState,
     updateRoomState
   } = useSocket()
   const { canEdit, isTeacher, setIsTeacher } = useEditPermission()
+  const { user } = useAuth();
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const [code, setCode] = useState<string>("// Start coding...")
-  const latestCodeRef = useRef<string>("// Start coding...")
+  const [currentLanguage, setCurrentLanguage] = useState('javascript');
+  const [autoSaveInterval, setAutoSaveInterval] = useState<NodeJS.Timeout | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+  const latestCodeRef = useRef<string>("")
   const isRemoteUpdate = useRef(false)
   // Track timestamp of latest local keystroke to ignore stale echoes
   const lastLocalEditRef = useRef<number>(0)
@@ -192,6 +200,13 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
     copyCode,
     formatCurrentCode,
     setLanguage,
+    getValue: () => latestCodeRef.current || "",
+    saveCode: () => {
+      if (editorRef.current && canEdit) {
+        const currentCode = editorRef.current.getValue();
+        triggerManualSave(currentCode);
+      }
+    }
   }));
 
   const copyCode = () => {
@@ -503,7 +518,7 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
   // Room state synchronization on connection/reconnection
   useEffect(() => {
     const syncRoomState = async () => {
-      if (socketConnected && socketReady && roomId) {
+      if (isConnected && socketReady && roomId) {
         try {
           const state = await requestRoomState(roomId);
           if (state) {
@@ -563,11 +578,11 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
     };
 
     // Only sync on initial connection or when roomId/socket changes
-    if (socketConnected && socketReady && roomId) {
+    if (isConnected && socketReady && roomId) {
       syncRoomState();
     }
     // eslint-disable-next-line
-  }, [socketConnected, socketReady, roomId]);
+  }, [isConnected, socketReady, roomId]);
 
   // State to track cursor positions
   const [cursorPositions, setCursorPositions] = useState<Record<string, { x: number; y: number }>>({});
@@ -1355,6 +1370,90 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, socketReady]);
 
+  // Auto-save functionality
+  useEffect(() => {
+    if (!socket || !canEdit) return;
+
+    // Set up auto-save interval (every 30 seconds)
+    const interval = setInterval(() => {
+      if (latestCodeRef.current && editorRef.current) {
+        const currentCode = editorRef.current.getValue();
+        if (currentCode !== latestCodeRef.current) {
+          setCode(currentCode);
+          latestCodeRef.current = currentCode;
+          triggerAutoSave(currentCode);
+        }
+      }
+    }, 30000); // 30 seconds
+
+    setAutoSaveInterval(interval);
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [socket, canEdit, latestCodeRef.current]);
+
+  // Manual save with Ctrl+S
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+        event.preventDefault();
+        if (editorRef.current && canEdit) {
+          const currentCode = editorRef.current.getValue();
+          triggerManualSave(currentCode);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [canEdit]);
+
+  // Listen for save status updates
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on('save-status', (data: { success: boolean; message: string; timestamp: string }) => {
+      if (data.success) {
+        setSaveStatus('saved');
+        setLastSaved(new Date(data.timestamp));
+        console.log('✅ Code saved successfully');
+      } else {
+        setSaveStatus('error');
+        console.error('❌ Save failed:', data.message);
+      }
+    });
+
+    return () => {
+      socket.off('save-status');
+    };
+  }, [socket]);
+
+  const triggerAutoSave = (code: string) => {
+    if (!socket || !user?.email) return;
+
+    setSaveStatus('saving');
+    socket.emit('code-change', {
+      roomId,
+      code,
+      userId: user.email,
+      username,
+      timestamp: Date.now()
+    });
+  };
+
+  const triggerManualSave = (code: string) => {
+    if (!socket || !currentUserId) return;
+
+    setSaveStatus('saving');
+    socket.emit('manual-save', {
+      roomId,
+      code,
+      language: currentLanguage,
+      userId: currentUserId
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-zinc-900">
@@ -1364,8 +1463,29 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
   }
 
   return (
-    <div className="relative w-full h-full">
-      {/* Monaco Editor */}
+    <div className="relative flex-1 min-w-0 flex flex-col">
+      {/* Save Status Indicator */}
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+        {saveStatus === 'saving' && (
+          <div className="flex items-center gap-1 px-2 py-1 bg-blue-500 text-white text-xs rounded">
+            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            Saving...
+          </div>
+        )}
+        {saveStatus === 'saved' && lastSaved && (
+          <div className="flex items-center gap-1 px-2 py-1 bg-green-500 text-white text-xs rounded">
+            <span>✓</span>
+            Saved {lastSaved.toLocaleTimeString()}
+          </div>
+        )}
+        {saveStatus === 'error' && (
+          <div className="flex items-center gap-1 px-2 py-1 bg-red-500 text-white text-xs rounded">
+            <span>✗</span>
+            Save failed
+          </div>
+        )}
+      </div>
+
       <Editor
         height="100%"
         width="100%"

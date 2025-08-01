@@ -11,6 +11,7 @@ import { FiUser, FiCopy, FiPlay, FiAlignLeft, FiUsers, FiLogOut, FiMoon, FiSun, 
 import { useTheme } from "@/context/ThemeContext"
 import { useEditPermission } from "@/context/EditPermissionContext"
 import ReactDOM from "react-dom";
+import TerminalPanel from "@/components/TerminalPanel";
 
 const languageOptions = [
 { value: 'javascript', label: 'JavaScript', icon: <span className="text-yellow-400">JS</span> },
@@ -444,6 +445,8 @@ const [activeUsers, setActiveUsers] = useState<string[]>([]);
 const [currentLanguage, setCurrentLanguage] = useState('javascript');
 const [sidebarOpen, setSidebarOpen] = useState(false);
 const [copied, setCopied] = useState(false);
+const [runCodeString, setRunCodeString] = useState<string | undefined>(undefined);
+const [userInput, setUserInput] = useState<string>("");
 
 useEffect(() => {
 if (!roomId) return;
@@ -460,7 +463,12 @@ if (typeof window !== "undefined") {
 }
 }, [roomId]);
 
-const handleRunCode = () => editorRef.current?.executeCode();
+const handleRunCode = () => {
+  const code = editorRef.current?.getValue() || "";
+  setRunCodeString(code);
+  setTimeout(() => setRunCodeString(undefined), 100);
+};
+
 const handleCopyCode = () => editorRef.current?.copyCode();
 const handleFormatCode = () => editorRef.current?.formatCurrentCode();
 const handleLanguageChange = (lang: string) => {
@@ -527,87 +535,18 @@ return (
                     <div className="w-full mt-4">
                         <EditorPermissionStatus />
                     </div>
-                    {/* Sidebar Toggle Button for Mobile */}
-                    <button
-                        className="lg:hidden absolute top-5 right-5 z-20 bg-[#171a29] text-white rounded-full p-3 shadow-lg border-2 border-gray-700 hover:bg-[#23263a] hover:scale-105 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        onClick={() => setSidebarOpen(true)}
-                        aria-label="Show Output"
-                        title="Show Output"
-                    >
-                        <FiTerminal className="w-6 h-6" />
-                    </button>
                 </div>
-                {/* Sidebar (Desktop) - Output only */}
-                <aside className="w-80 flex-shrink-0 bg-[#171a29] border-l-2 border-zinc-800 overflow-y-auto hidden lg:flex flex-col rounded-3xl shadow-2xl transition-all duration-200 min-w-0">
-                    <div className="flex-1 p-6 flex flex-col">
-                        <h3 className="text-white mb-3 font-semibold">Output</h3>
-                        <pre className={`w-full flex-1 whitespace-pre-wrap text-base rounded-xl bg-black p-4 overflow-auto resize-y min-h-[120px] max-h-[400px] ${executionError ? 'text-red-400' : 'text-green-300'}`}>
-                            {executionError || executionOutput || "Click 'Run' to see the output here."}
-                        </pre>
-                    </div>
-                </aside>
-                {/* Slide-in Sidebar Drawer (Mobile/Tablet) */}
-                {sidebarOpen && (
-                    <div className="fixed inset-0 z-40 flex lg:hidden" role="dialog" aria-modal="true" tabIndex={-1}>
-                        {/* Overlay */}
-                        <div
-                            className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
-                            onClick={() => setSidebarOpen(false)}
-                            aria-label="Close sidebar overlay"
-                            tabIndex={0}
-                        />
-                        {/* Drawer */}
-                        <aside className="relative ml-auto w-80 max-w-full h-full bg-[#171a29] border-l-2 border-zinc-800 flex flex-col shadow-2xl animate-slide-in-right rounded-l-3xl min-w-0 p-4 transition-all duration-200 focus:outline-none" tabIndex={0}>
-                            <button
-                                className="absolute top-5 right-5 z-50 bg-zinc-800 text-white rounded-full p-3 shadow border-2 border-gray-700 hover:bg-zinc-700 hover:scale-105 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[44px] min-h-[44px]"
-                                onClick={() => setSidebarOpen(false)}
-                                aria-label="Close sidebar"
-                                type="button"
-                            >
-                                <span className="text-2xl">×</span>
-                            </button>
-                            <div className="p-2 border-b border-gray-700">
-                                <div className="flex items-center justify-between mb-2">
-                                    <h3 className="text-white font-semibold">Output</h3>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={handleCopyOutput}
-                                            className="p-1 rounded hover:bg-zinc-800 text-gray-400 hover:text-blue-500 transition min-w-[44px] min-h-[44px]"
-                                            title={copied ? 'Copied!' : 'Copy Output'}
-                                            aria-label="Copy Output"
-                                            type="button"
-                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                        >
-                                            <FiCopy className="w-5 h-5" />
-                                        </button>
-                                        <button
-                                            onClick={() => { setExecutionOutput(null); setExecutionError(null); }}
-                                            className="p-1 rounded hover:bg-zinc-800 text-gray-400 hover:text-red-500 transition min-w-[44px] min-h-[44px]"
-                                            title="Clear Output"
-                                            aria-label="Clear Output"
-                                            type="button"
-                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                        >
-                                            <FiTrash2 className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className={`relative w-full flex items-start ${executionError ? 'border-l-4 border-red-500' : 'border-l-4 border-green-500'}`}>
-                                    <span className="mt-1 mr-2">
-                                        {executionError ? (
-                                            <FiAlertCircle className="text-red-400 w-5 h-5" />
-                                        ) : (
-                                            <FiCheckCircle className="text-green-400 w-5 h-5" />
-                                        )}
-                                    </span>
-                                    <pre className={`w-full flex-1 whitespace-pre-wrap text-base rounded-xl bg-black p-4 overflow-auto resize-y min-h-[120px] max-h-[400px] ${executionError ? 'text-red-400' : 'text-green-300'}`}>
-                                        {executionError || executionOutput || "Click 'Run' to see the output here."}
-                                    </pre>
-                                </div>
-                            </div>
-                        </aside>
-                    </div>
-                )}
+                {/* Terminal Panel (Desktop & Mobile) */}
+                <div className="w-80 flex-shrink-0 bg-[#171a29] border-l-2 border-zinc-800 overflow-y-auto flex flex-col rounded-3xl shadow-2xl transition-all duration-200 min-w-0 p-4">
+                    <h3 className="text-white mb-3 font-semibold">Terminal</h3>
+                    
+                    <TerminalPanel
+                        runCode={runCodeString}
+                        language={currentLanguage}
+                        input={userInput}
+                        className="mt-2"
+                    />
+                </div>
             </div>
         </div>
     </EditPermissionProvider>
