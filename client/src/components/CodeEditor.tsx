@@ -32,6 +32,7 @@ export interface CodeEditorRef {
   formatCurrentCode: () => void;
   setLanguage: (lang: string) => void;
   getValue: () => string;
+  setValue: (code: string) => void;
   saveCode: () => void;
 }
 
@@ -201,6 +202,23 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
     formatCurrentCode,
     setLanguage,
     getValue: () => latestCodeRef.current || "",
+    setValue: (code: string) => {
+      if (editorRef.current) {
+        isRemoteUpdate.current = true;
+        try {
+          const wasReadOnly = editorRef.current.getOptions().get(monaco.editor.EditorOption.readOnly);
+          if (wasReadOnly) editorRef.current.updateOptions({ readOnly: false });
+          
+          editorRef.current.setValue(code);
+          setCode(code);
+          latestCodeRef.current = code;
+          
+          if (wasReadOnly) editorRef.current.updateOptions({ readOnly: true });
+        } finally {
+          isRemoteUpdate.current = false;
+        }
+      }
+    },
     saveCode: () => {
       if (editorRef.current && canEdit) {
         const currentCode = editorRef.current.getValue();

@@ -16,6 +16,7 @@ import connectDB from "./config/database.js";
 import autoSaveService from "./services/autoSaveService.js";
 import User from './models/User.js';
 import userRoutes from "./routes/user.js"
+import codeHistoryRoutes from "./routes/codeHistory.js"
 
 // Load environment variables
 dotenv.config()
@@ -140,6 +141,7 @@ app.get('/socket.io/info', (_, res) => {
 // Use authentication routes
 app.use('/api/auth', authRoutes)
 app.use('/api/users', userRoutes)
+app.use('/api/code-history', codeHistoryRoutes)
 
 // Add HTTP fallback endpoint for joining rooms
 app.post('/api/join-room', (req, res) => {

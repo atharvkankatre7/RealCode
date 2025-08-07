@@ -7,12 +7,13 @@ import ProtectedRoute from "@/components/ProtectedRoute"
 import { EditPermissionProvider } from "@/context/EditPermissionContext"
 import { EditorPermissionStatus } from "@/components/PermissionBadge"
 import { useAuth } from '@/context/AuthContext';
-import { FiUser, FiCopy, FiPlay, FiAlignLeft, FiUsers, FiLogOut, FiMoon, FiSun, FiLock, FiUnlock, FiCheckCircle, FiAlertCircle, FiTerminal, FiTrash2 } from 'react-icons/fi';
+import { FiUser, FiCopy, FiPlay, FiAlignLeft, FiUsers, FiLogOut, FiMoon, FiSun, FiLock, FiUnlock, FiCheckCircle, FiAlertCircle, FiTerminal, FiTrash2, FiClock } from 'react-icons/fi';
 import { useTheme } from "@/context/ThemeContext"
 import { useEditPermission } from "@/context/EditPermissionContext"
 import ReactDOM from "react-dom";
 import TerminalPanel from "@/components/TerminalPanel";
 import { LanguageProvider, useLanguage } from '@/context/LanguageContext';
+import CodeHistoryPanel from "@/components/CodeHistoryPanel";
 
 // Dynamic import for CodeEditor to avoid SSR issues
 const CodeEditor = dynamic(() => import("@/components/CodeEditor"), {
@@ -147,7 +148,7 @@ b = Math.round(b + (255 - b) * percent);
 return `rgb(${r}, ${g}, ${b})`;
 }
 
-const TopNavbar = ({ roomId, onRun, onCopy, onFormat, onLanguageChange, language, activeUsers, user, logout, theme, toggleTheme }: any) => {
+const TopNavbar = ({ roomId, onRun, onCopy, onFormat, onLanguageChange, language, activeUsers, user, logout, theme, toggleTheme, onOpenHistory }: any) => {
 const { canEdit, isTeacher, toggleRoomPermission } = useEditPermission();
 const [isRoomToggling, setIsRoomToggling] = useState(false);
 const [showProfile, setShowProfile] = useState(false);
@@ -226,6 +227,8 @@ return (
         <button onClick={onCopy} className="hidden xs:inline-flex items-center justify-center p-1 sm:p-2 hover:bg-gray-600 focus:outline-none min-w-[44px] min-h-[44px] rounded-md" title="Copy code (Ctrl+C)" aria-label="Copy code"><FiCopy className="text-white" /></button>
         {/* Format Button (hide on xs) */}
         <button onClick={onFormat} className="hidden xs:inline-flex items-center justify-center p-1 sm:p-2 hover:bg-gray-600 focus:outline-none min-w-[44px] min-h-[44px] rounded-md" title="Format code (Shift+Alt+F)" aria-label="Format code"><FiAlignLeft className="text-white" /></button>
+        {/* Code History Button */}
+        <button onClick={onOpenHistory} className="flex items-center justify-center p-1 sm:p-2 hover:bg-gray-600 focus:outline-none min-w-[44px] min-h-[44px] rounded-md" title="Code History" aria-label="Code History"><FiClock className="text-white" /></button>
         {/* User List Button */}
         <Popover
             trigger={<button className="flex items-center justify-center w-10 h-10 rounded-full bg-zinc-800 hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 shadow min-w-[44px] min-h-[44px]" aria-label="Show users"><FiUsers className="text-lg text-blue-400" /></button>}
@@ -343,6 +346,7 @@ return (
           <div className="flex flex-col gap-2 mt-4">
             <button onClick={onCopy} className="flex items-center gap-2 p-3 bg-gray-700 rounded-md text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[44px] min-h-[44px]" title="Copy code (Ctrl+C)" aria-label="Copy code"><FiCopy /><span>Copy</span></button>
             <button onClick={onFormat} className="flex items-center gap-2 p-3 bg-gray-700 rounded-md text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[44px] min-h-[44px]" title="Format code (Shift+Alt+F)" aria-label="Format code"><FiAlignLeft /><span>Format</span></button>
+            <button onClick={onOpenHistory} className="flex items-center gap-2 p-3 bg-gray-700 rounded-md text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[44px] min-h-[44px]" title="Code History" aria-label="Code History"><FiClock /><span>History</span></button>
             <button onClick={onRun} className="flex items-center gap-2 p-3 bg-blue-600 rounded-md text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[44px] min-h-[44px]" title="Run code (Ctrl+Enter)" aria-label="Run code"><FiPlay /><span>Run</span></button>
           </div>
           {/* Room Control (if teacher) */}
@@ -456,6 +460,7 @@ const [sidebarOpen, setSidebarOpen] = useState(false);
 const [copied, setCopied] = useState(false);
 const [runCodeString, setRunCodeString] = useState<string | undefined>(undefined);
 const [userInput, setUserInput] = useState<string>("");
+const [showHistory, setShowHistory] = useState(false);
 
 useEffect(() => {
 if (!roomId) return;
@@ -482,6 +487,16 @@ const handleCopyCode = () => editorRef.current?.copyCode();
 const handleFormatCode = () => editorRef.current?.formatCurrentCode();
 const handleLanguageChange = (lang: string) => {
   setLanguage(lang);
+  editorRef.current?.setLanguage(lang);
+};
+
+const handleOpenHistory = () => {
+  setShowHistory(true);
+};
+
+const handleLoadCode = (code: string, lang: string) => {
+  setLanguage(lang);
+  editorRef.current?.setValue(code);
   editorRef.current?.setLanguage(lang);
 };
 
@@ -525,6 +540,7 @@ return (
                     logout={logout}
                     theme={theme}
                     toggleTheme={toggleTheme}
+                    onOpenHistory={handleOpenHistory}
                 />
             </div>
             {/* Main Content Area */}
@@ -558,6 +574,15 @@ return (
                 </div>
             </div>
         </div>
+        
+        {/* Code History Panel */}
+        <CodeHistoryPanel
+            isOpen={showHistory}
+            onClose={() => setShowHistory(false)}
+            onLoadCode={handleLoadCode}
+            currentCode={editorRef.current?.getValue() || ""}
+            currentLanguage={language}
+        />
     </EditPermissionProvider>
 </ProtectedRoute>
 );
