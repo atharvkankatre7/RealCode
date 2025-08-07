@@ -43,16 +43,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (isSignedIn && clerkUser) {
         const primaryEmail = clerkUser.primaryEmailAddress?.emailAddress
         if (primaryEmail) {
-          setUser({
+          // Create user in backend database
+          const createUserInBackend = async () => {
+            try {
+              const response = await fetch('http://localhost:5002/api/auth/clerk', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  email: primaryEmail,
+                  name: clerkUser.fullName || clerkUser.username || primaryEmail.split('@')[0],
+                  clerkId: clerkUser.id,
+                  picture: clerkUser.imageUrl
+                })
+              });
+              
+              if (response.ok) {
+                console.log('User created/updated in backend database');
+              } else {
+                console.error('Failed to create user in backend:', await response.text());
+              }
+            } catch (error) {
+              console.error('Error creating user in backend:', error);
+            }
+          };
+          
+          createUserInBackend();
+          
+          const userData = {
             email: primaryEmail,
             name: clerkUser.fullName || clerkUser.username || primaryEmail.split('@')[0],
             photoURL: clerkUser.imageUrl,
             role: typeof clerkUser.publicMetadata?.role === 'string' ? clerkUser.publicMetadata.role : "student" // Ensure role is a string
-          })
+          };
+          console.log('👤 AuthContext: Setting user:', userData);
+          setUser(userData);
         }
-      } else {
-        setUser(null)
-      }
+              } else {
+          console.log('👤 AuthContext: Setting user to null');
+          setUser(null)
+        }
       setLoading(false)
     }
   }, [clerkLoaded, clerkUser, isSignedIn])

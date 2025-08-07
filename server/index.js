@@ -14,6 +14,8 @@ import fs from "fs";
 import path from "path";
 import connectDB from "./config/database.js";
 import autoSaveService from "./services/autoSaveService.js";
+import User from './models/User.js';
+import userRoutes from "./routes/user.js"
 
 // Load environment variables
 dotenv.config()
@@ -92,6 +94,11 @@ app.get('/health', (_, res) => {
   });
 });
 
+// Test endpoint for user preferences
+app.get('/api/test-preferences', (_, res) => {
+  res.json({ message: 'Preferences endpoints are working!' });
+});
+
 // Add database health check endpoint
 app.get('/health/db', async (_, res) => {
   try {
@@ -132,6 +139,7 @@ app.get('/socket.io/info', (_, res) => {
 
 // Use authentication routes
 app.use('/api/auth', authRoutes)
+app.use('/api/users', userRoutes)
 
 // Add HTTP fallback endpoint for joining rooms
 app.post('/api/join-room', (req, res) => {
@@ -964,6 +972,53 @@ app.get('/api/test-get-rooms', async (req, res) => {
     const rooms = await Room.find({});
     res.json({ success: true, rooms });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Get user preferences
+app.get('/api/user/preferences', async (req, res) => {
+  try {
+    const { email } = req.query;
+    console.log('📥 Getting preferences for email:', email);
+    if (!email) return res.status(400).json({ error: 'Missing email' });
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    console.log('✅ Found user preferences:', user.preferences);
+    res.json({ preferences: user.preferences || {} });
+  } catch (error) {
+    console.error('❌ Error getting preferences:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Update user preferences
+app.post('/api/user/preferences', async (req, res) => {
+  try {
+    const { email, preferences } = req.body;
+    console.log('📝 Updating preferences for email:', email, 'preferences:', preferences);
+    console.log('📊 Full request body:', req.body);
+    
+    if (!email || !preferences) return res.status(400).json({ error: 'Missing email or preferences' });
+    
+    // Merge new preferences into existing preferences
+    const setObj = Object.fromEntries(
+      Object.entries(preferences).map(([k, v]) => [`preferences.${k}`, v])
+    );
+    const user = await User.findOneAndUpdate(
+      { email },
+      { $set: setObj },
+      { new: true, upsert: false }
+    );
+    
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    console.log('✅ Preferences updated successfully for user:', user.email);
+    console.log('📋 Updated user preferences:', user.preferences);
+    console.log('📋 Full user document:', JSON.stringify(user, null, 2));
+    
+    res.json({ success: true, preferences: user.preferences });
+  } catch (error) {
+    console.error('❌ Error updating preferences:', error);
     res.status(500).json({ error: error.message });
   }
 });

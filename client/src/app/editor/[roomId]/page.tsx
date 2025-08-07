@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation"
 import { useEffect, useState, useRef } from "react"
-import CodeEditor, { CodeEditorRef } from "@/components/CodeEditor"
+import dynamic from "next/dynamic"
 import ProtectedRoute from "@/components/ProtectedRoute"
 import { EditPermissionProvider } from "@/context/EditPermissionContext"
 import { EditorPermissionStatus } from "@/components/PermissionBadge"
@@ -12,6 +12,15 @@ import { useTheme } from "@/context/ThemeContext"
 import { useEditPermission } from "@/context/EditPermissionContext"
 import ReactDOM from "react-dom";
 import TerminalPanel from "@/components/TerminalPanel";
+import { LanguageProvider, useLanguage } from '@/context/LanguageContext';
+
+// Dynamic import for CodeEditor to avoid SSR issues
+const CodeEditor = dynamic(() => import("@/components/CodeEditor"), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-full bg-zinc-900 text-white">Loading editor...</div>
+});
+
+type CodeEditorRef = any; // Define CodeEditorRef here since it's no longer imported directly
 
 const languageOptions = [
 { value: 'javascript', label: 'JavaScript', icon: <span className="text-yellow-400">JS</span> },
@@ -430,7 +439,7 @@ const RightSidebar = ({ executionOutput, executionError, activeUsers, onClearOut
 </aside>
 );
 
-export default function EditorPage() {
+function EditorPage() {
 const params = useParams();
 const roomId = params?.roomId as string;
 const [username, setUsername] = useState<string>("Anonymous");
@@ -442,7 +451,7 @@ const userDropdownButtonRef = useRef<HTMLButtonElement>(null);
 const [executionOutput, setExecutionOutput] = useState<string | null>(null);
 const [executionError, setExecutionError] = useState<string | null>(null);
 const [activeUsers, setActiveUsers] = useState<string[]>([]);
-const [currentLanguage, setCurrentLanguage] = useState('javascript');
+const { language, setLanguage } = useLanguage();
 const [sidebarOpen, setSidebarOpen] = useState(false);
 const [copied, setCopied] = useState(false);
 const [runCodeString, setRunCodeString] = useState<string | undefined>(undefined);
@@ -472,8 +481,8 @@ const handleRunCode = () => {
 const handleCopyCode = () => editorRef.current?.copyCode();
 const handleFormatCode = () => editorRef.current?.formatCurrentCode();
 const handleLanguageChange = (lang: string) => {
-setCurrentLanguage(lang);
-editorRef.current?.setLanguage(lang);
+  setLanguage(lang);
+  editorRef.current?.setLanguage(lang);
 };
 
 const handleExecutionResult = ({ output, error }: { output: string | null; error: string | null }) => {
@@ -510,7 +519,7 @@ return (
                     onCopy={handleCopyCode}
                     onFormat={handleFormatCode}
                     onLanguageChange={handleLanguageChange}
-                    language={currentLanguage}
+                    language={language}
                     activeUsers={activeUsers}
                     user={user}
                     logout={logout}
@@ -542,7 +551,7 @@ return (
                     
                     <TerminalPanel
                         runCode={runCodeString}
-                        language={currentLanguage}
+                        language={language}
                         input={userInput}
                         className="mt-2"
                     />
@@ -553,3 +562,14 @@ return (
 </ProtectedRoute>
 );
 }
+
+// Wrap the page in LanguageProvider
+const EditorPageWithProvider = (props: any) => {
+  return (
+    <LanguageProvider>
+      <EditorPage {...props} />
+    </LanguageProvider>
+  );
+};
+
+export default EditorPageWithProvider;

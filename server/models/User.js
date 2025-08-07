@@ -4,8 +4,15 @@ import mongoose from 'mongoose';
 const userSchema = new mongoose.Schema({
   firebaseUid: { 
     type: String, 
-    required: true, 
-    unique: true 
+    required: false, // Changed from true to false
+    unique: true,
+    sparse: true // Allows multiple null values
+  },
+  clerkId: {
+    type: String,
+    required: false,
+    unique: true,
+    sparse: true
   },
   email: { 
     type: String, 
@@ -54,7 +61,6 @@ userSchema.pre('save', function(next) {
   next();
 });
 
-
 const User = mongoose.model('User', userSchema);
 
 // Create a new user document
@@ -63,8 +69,7 @@ export async function createUser(userData) {
   return await user.save();
 }
 
-
-// Find or create a user with Google credentials
+// Find or create a user with Google credentials (Firebase)
 export async function findOrCreateGoogleUser(email, name, googleId, picture) {
   let user = await User.findOne({ email });
   if (!user) {
@@ -79,6 +84,38 @@ export async function findOrCreateGoogleUser(email, name, googleId, picture) {
     });
     await user.save();
   }
+  return user;
+}
+
+// Find or create a user with Clerk credentials
+export async function findOrCreateClerkUser(email, name, clerkId, picture) {
+  console.log('🔍 Looking for existing user with email:', email);
+  let user = await User.findOne({ email });
+  
+  if (!user) {
+    console.log('👤 User not found, creating new user...');
+    user = new User({
+      email,
+      displayName: name,
+      clerkId: clerkId, // Only set clerkId, not firebaseUid
+      photoURL: picture,
+      role: 'student',
+      createdAt: new Date(),
+      lastActive: new Date(),
+      // Don't set firebaseUid for Clerk users
+    });
+    
+    try {
+      await user.save();
+      console.log('✅ New user created successfully:', user.email);
+    } catch (saveError) {
+      console.error('❌ Error saving new user:', saveError);
+      throw saveError;
+    }
+  } else {
+    console.log('👤 Existing user found:', user.email);
+  }
+  
   return user;
 }
 

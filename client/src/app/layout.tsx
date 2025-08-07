@@ -13,6 +13,7 @@ import { ThemeProvider } from "@/context/ThemeContext"
 import AppShell from '@/components/AppShell';
 import { usePathname } from 'next/navigation';
 import Providers from "@/components/Providers";
+import Script from "next/script";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,6 +33,46 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+      <head>
+        <Script
+          id="suppress-hydration-errors"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                const originalError = console.error;
+                const originalWarn = console.warn;
+                
+                console.error = function(...args) {
+                  const message = args[0]?.toString() || '';
+                  if (
+                    message.includes('hydration') || 
+                    message.includes('mismatch') ||
+                    message.includes('data-new-gr-c-s-check-loaded') ||
+                    message.includes('data-gr-ext-installed')
+                  ) {
+                    return;
+                  }
+                  originalError.apply(console, args);
+                };
+                
+                console.warn = function(...args) {
+                  const message = args[0]?.toString() || '';
+                  if (
+                    message.includes('hydration') || 
+                    message.includes('mismatch') ||
+                    message.includes('data-new-gr-c-s-check-loaded') ||
+                    message.includes('data-gr-ext-installed')
+                  ) {
+                    return;
+                  }
+                  originalWarn.apply(console, args);
+                };
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className="bg-white dark:bg-[#0e0e0e]">
         <ClerkProvider>
           <Providers>

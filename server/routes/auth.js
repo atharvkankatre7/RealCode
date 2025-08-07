@@ -8,7 +8,8 @@ import {
   verifyUser,
   loginUser,
   getUser,
-  findOrCreateGoogleUser
+  findOrCreateGoogleUser,
+  findOrCreateClerkUser
 } from '../models/User.js';
 
 const router = express.Router();
@@ -117,7 +118,11 @@ router.post('/register', async (req, res) => {
     }
 
     // Create user
-    const user = createUser(email, password, name);
+    const user = await createUser({
+      email,
+      password,
+      displayName: name
+    });
 
     return res.json({
       success: true,
@@ -272,6 +277,55 @@ router.post('/google', async (req, res) => {
   } catch (error) {
     console.error('Error with Google authentication:', error);
     return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Test endpoint to verify auth routes are working
+router.get('/test', (req, res) => {
+  console.log('🧪 Auth test endpoint called');
+  res.json({ message: 'Auth routes are working!' });
+});
+
+// Clerk Authentication
+router.post('/clerk', async (req, res) => {
+  console.log('🔐 Clerk authentication endpoint called');
+  console.log('📝 Request body:', req.body);
+  
+  try {
+    const { email, name, clerkId, picture } = req.body;
+
+    if (!email || !clerkId) {
+      console.log('❌ Missing required fields:', { email: !!email, clerkId: !!clerkId });
+      return res.status(400).json({ error: 'Email and clerkId are required' });
+    }
+
+    console.log('✅ Valid request, creating/finding user...');
+    
+    // Find or create a user with Clerk credentials
+    const user = await findOrCreateClerkUser(email, name, clerkId, picture);
+
+    console.log('✅ User created/found:', user.email);
+
+    // Generate a JWT token
+    const token = generateToken(user);
+
+    console.log('✅ Clerk authentication successful');
+
+    return res.json({
+      success: true,
+      message: 'Clerk authentication successful',
+      token,
+      user: {
+        email: user.email,
+        name: user.displayName,
+        photoURL: user.photoURL,
+        emailVerified: true
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error with Clerk authentication:', error);
+    console.error('❌ Error stack:', error.stack);
+    return res.status(500).json({ error: error.message || 'Server error' });
   }
 });
 

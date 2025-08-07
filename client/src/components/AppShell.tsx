@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import Navbar from '@/components/Navbar';
+import HydrationSuppressor from './HydrationSuppressor';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -10,9 +11,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       {!isEditorRoute && <Navbar />}
-      <div className="w-full">
-        {children}
-      </div>
+      <HydrationSuppressor>
+        <div className="w-full">
+          {children}
+        </div>
+      </HydrationSuppressor>
     </>
   );
 }

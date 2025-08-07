@@ -6,14 +6,14 @@ import { EditPermissionProvider } from "@/context/EditPermissionContext";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider>
-      <AuthProvider>
+    <AuthProvider>
+      <ThemeProvider>
         <SocketProvider>
           <EditPermissionProvider>
             {children}
           </EditPermissionProvider>
         </SocketProvider>
-      </AuthProvider>
-    </ThemeProvider>
+      </ThemeProvider>
+    </AuthProvider>
   );
 } 

@@ -7,17 +7,17 @@ import { motion } from "framer-motion"
 import { useTheme } from "@/context/ThemeContext"
 import { useAuth } from "@/context/AuthContext"
 import { useEditPermission } from "@/context/EditPermissionContext";
-import { FiSun, FiMoon, FiMonitor, FiChevronDown, FiCode, FiUser, FiUsers } from "react-icons/fi"
+import { FiSun, FiMoon, FiChevronDown, FiCode, FiUser, FiUsers } from "react-icons/fi"
 import { usePathname } from "next/navigation";
 import { useRef, useEffect } from "react";
 
 const Navbar = () => {
   const { user, logout } = useAuth()
   const router = useRouter()
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, toggleTheme } = useTheme()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [showProfilePanel, setShowProfilePanel] = useState(false)
-  const [themeMenuOpen, setThemeMenuOpen] = useState(false)
+
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const { users } = useEditPermission();
   const pathname = usePathname();
@@ -103,57 +103,15 @@ const Navbar = () => {
               )}
             </div>
           )}
-          {/* Animated Theme Toggle */}
-          <div className="relative">
-            <button
-              aria-label="Theme switcher"
-              className="flex items-center gap-2 px-3 py-2 rounded-full bg-zinc-800 hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-              onClick={() => setThemeMenuOpen((v) => !v)}
-              tabIndex={0}
-              onBlur={() => setTimeout(() => setThemeMenuOpen(false), 150)}
-            >
-              <span className="relative w-6 h-6 flex items-center justify-center">
-                <motion.span
-                  key={theme}
-                  initial={{ rotate: -90, opacity: 0 }}
-                  animate={{ rotate: 0, opacity: 1 }}
-                  exit={{ rotate: 90, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                  className="absolute"
-                >
-                  {theme === "light" && <FiSun className="text-yellow-400" />}
-                  {theme === "dark" && <FiMoon className="text-indigo-400" />}
-                  {theme === "system" && <FiMonitor className="text-green-400" />}
-                </motion.span>
-              </span>
-              <FiChevronDown className="ml-1 text-gray-400" />
-            </button>
-            {themeMenuOpen && (
-              <div className="absolute right-0 mt-2 w-40 bg-zinc-800 rounded-xl shadow-lg py-2 z-50 border border-zinc-700 animate-fade-in">
-                <button
-                  className={`w-full flex items-center gap-2 px-4 py-2 text-left rounded-lg transition-colors ${theme === "light" ? "bg-zinc-700 text-yellow-400" : "text-gray-200 hover:bg-zinc-700"}`}
-                  onClick={() => { setTheme("light"); setThemeMenuOpen(false); }}
-                  aria-label="Light theme"
-                >
-                  <FiSun /> Light
-                </button>
-                <button
-                  className={`w-full flex items-center gap-2 px-4 py-2 text-left rounded-lg transition-colors ${theme === "dark" ? "bg-zinc-700 text-indigo-400" : "text-gray-200 hover:bg-zinc-700"}`}
-                  onClick={() => { setTheme("dark"); setThemeMenuOpen(false); }}
-                  aria-label="Dark theme"
-                >
-                  <FiMoon /> Dark
-                </button>
-                <button
-                  className={`w-full flex items-center gap-2 px-4 py-2 text-left rounded-lg transition-colors ${theme === "system" ? "bg-zinc-700 text-green-400" : "text-gray-200 hover:bg-zinc-700"}`}
-                  onClick={() => { setTheme("system"); setThemeMenuOpen(false); }}
-                  aria-label="System theme"
-                >
-                  <FiMonitor /> System
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Simple Theme Toggle */}
+          <button
+            aria-label="Toggle theme"
+            className="flex items-center justify-center w-10 h-10 rounded-full bg-zinc-800 hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onClick={toggleTheme}
+            title="Toggle theme"
+          >
+            {theme === "light" ? <FiMoon className="text-blue-400" /> : <FiSun className="text-yellow-300" />}
+          </button>
           {/* Profile Icon (right) */}
           {user && (
             <button
@@ -187,31 +145,16 @@ const Navbar = () => {
             transition={{ duration: 0.2 }}
           >
             <div className="flex flex-col space-y-4">
-              {/* Theme Switcher */}
-              <div className="flex justify-center space-x-4 py-2">
+              {/* Theme Toggle */}
+              <div className="flex justify-center py-2">
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => setTheme("light")}
-                  className={`p-2 rounded-full ${theme === "light" ? "bg-yellow-400 text-yellow-900" : "text-gray-400"}`}
+                  onClick={toggleTheme}
+                  className={`p-3 rounded-full ${theme === "light" ? "bg-yellow-400 text-yellow-900" : "bg-indigo-600 text-white"}`}
+                  title="Toggle theme"
                 >
-                  <FiSun />
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setTheme("dark")}
-                  className={`p-2 rounded-full ${theme === "dark" ? "bg-indigo-600 text-white" : "text-gray-400"}`}
-                >
-                  <FiMoon />
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setTheme("system")}
-                  className={`p-2 rounded-full ${theme === "system" ? "bg-green-500 text-white" : "text-gray-400"}`}
-                >
-                  <FiMonitor />
+                  {theme === "light" ? <FiMoon /> : <FiSun />}
                 </motion.button>
               </div>
 
