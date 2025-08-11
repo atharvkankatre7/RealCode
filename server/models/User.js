@@ -16,7 +16,11 @@ const userSchema = new mongoose.Schema({
   },
   email: { 
     type: String, 
-    required: true 
+    required: true,
+    lowercase: true,
+    trim: true,
+    unique: true,
+    index: true
   },
   displayName: String,
   role: { 
@@ -55,8 +59,15 @@ const userSchema = new mongoose.Schema({
   }
 });
 
+// Ensure unique index for email
+userSchema.index({ email: 1 }, { unique: true });
+
 // Update lastActive on save
 userSchema.pre('save', function(next) {
+  // Normalize email to lowercase and trimmed
+  if (typeof this.email === 'string') {
+    this.email = this.email.toLowerCase().trim();
+  }
   this.lastActive = new Date();
   next();
 });
@@ -65,16 +76,19 @@ const User = mongoose.model('User', userSchema);
 
 // Create a new user document
 export async function createUser(userData) {
-  const user = new User(userData);
+  const normalized = { ...userData };
+  if (normalized.email) normalized.email = normalized.email.toLowerCase().trim();
+  const user = new User(normalized);
   return await user.save();
 }
 
 // Find or create a user with Google credentials (Firebase)
 export async function findOrCreateGoogleUser(email, name, googleId, picture) {
-  let user = await User.findOne({ email });
+  const normalizedEmail = email.toLowerCase().trim();
+  let user = await User.findOne({ email: normalizedEmail });
   if (!user) {
     user = new User({
-      email,
+      email: normalizedEmail,
       displayName: name,
       firebaseUid: googleId,
       photoURL: picture,
@@ -90,12 +104,13 @@ export async function findOrCreateGoogleUser(email, name, googleId, picture) {
 // Find or create a user with Clerk credentials
 export async function findOrCreateClerkUser(email, name, clerkId, picture) {
   console.log('🔍 Looking for existing user with email:', email);
-  let user = await User.findOne({ email });
+  const normalizedEmail = email.toLowerCase().trim();
+  let user = await User.findOne({ email: normalizedEmail });
   
   if (!user) {
     console.log('👤 User not found, creating new user...');
     user = new User({
-      email,
+      email: normalizedEmail,
       displayName: name,
       clerkId: clerkId, // Only set clerkId, not firebaseUid
       photoURL: picture,
@@ -123,12 +138,12 @@ export default User;
 
 // Get a user by email
 export async function getUser(email) {
-  return await User.findOne({ email });
+  return await User.findOne({ email: (email || '').toLowerCase().trim() });
 }
 
 // Login user by email and password
 export async function loginUser(email, password) {
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: (email || '').toLowerCase().trim() });
   if (!user) {
     throw new Error('User not found');
   }
@@ -141,12 +156,12 @@ export async function loginUser(email, password) {
 
 // Check if a user exists by email
 export async function userExists(email) {
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: (email || '').toLowerCase().trim() });
   return !!user;
 }
 
 // Dummy verifyUser function (implement as needed)
 export async function verifyUser(email) {
   // Example: set a verified flag (add to schema if needed)
-  return await User.updateOne({ email }, { $set: { emailVerified: true } });
+  return await User.updateOne({ email: (email || '').toLowerCase().trim() }, { $set: { emailVerified: true } });
 }

@@ -17,6 +17,7 @@ import autoSaveService from "./services/autoSaveService.js";
 import User from './models/User.js';
 import userRoutes from "./routes/user.js"
 import codeHistoryRoutes from "./routes/codeHistory.js"
+import commentRoutes from "./routes/comments.js"
 
 // Load environment variables
 dotenv.config()
@@ -56,7 +57,7 @@ const io = new Server(httpServer, {
     origin: ["http://localhost:3000", "http://127.0.0.1:3000", "*"], // Allow localhost and all origins
     methods: ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
     credentials: false, // Set to false to avoid CORS issues
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "x-user-email"]
   },
   transports: ['polling', 'websocket'], // Try polling first, then websocket
   pingTimeout: 30000,
@@ -78,7 +79,7 @@ app.use(
     origin: "*", // Allow all origins for testing
     methods: ["GET", "POST", "OPTIONS", "PUT", "DELETE", "PATCH"],
     credentials: false, // Set to false to avoid CORS issues
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "x-user-email"]
   })
 )
 
@@ -142,6 +143,7 @@ app.get('/socket.io/info', (_, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/code-history', codeHistoryRoutes)
+app.use('/api/comments', commentRoutes)
 
 // Add HTTP fallback endpoint for joining rooms
 app.post('/api/join-room', (req, res) => {
@@ -984,7 +986,8 @@ app.get('/api/user/preferences', async (req, res) => {
     const { email } = req.query;
     console.log('📥 Getting preferences for email:', email);
     if (!email) return res.status(400).json({ error: 'Missing email' });
-    const user = await User.findOne({ email });
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) return res.status(404).json({ error: 'User not found' });
     console.log('✅ Found user preferences:', user.preferences);
     res.json({ preferences: user.preferences || {} });
@@ -1002,13 +1005,14 @@ app.post('/api/user/preferences', async (req, res) => {
     console.log('📊 Full request body:', req.body);
     
     if (!email || !preferences) return res.status(400).json({ error: 'Missing email or preferences' });
+    const normalizedEmail = String(email).toLowerCase().trim();
     
     // Merge new preferences into existing preferences
     const setObj = Object.fromEntries(
       Object.entries(preferences).map(([k, v]) => [`preferences.${k}`, v])
     );
     const user = await User.findOneAndUpdate(
-      { email },
+      { email: normalizedEmail },
       { $set: setObj },
       { new: true, upsert: false }
     );

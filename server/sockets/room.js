@@ -1014,59 +1014,42 @@ export const registerRoomHandlers = (io, socket) => {
     }
   });
 
-  // Handle typing notifications
-  socket.on("typing", ({ roomId, username, userId }) => {
+  // Handle typing notifications - single handler only
+  socket.on("typing", ({ roomId, userId }) => {
     if (!roomId) return;
 
     try {
-      // Get the room
       const room = rooms[roomId];
       if (!room) return;
 
-      // Use exactly the username provided by the user without any modifications
-      // This ensures we use exactly what the user entered on the dashboard
-      let typingUser = { username: username, userId: userId || null };
-
-      // First try to find the user by userId
+      // Get username by userId lookup for consistency
+      let username = socket.username || socket.id;
+      
       if (userId) {
         const user = room.users.find(u => u.userId === userId);
         if (user) {
-          typingUser = { username: user.username, userId: user.userId };
-          console.log(`Found user by userId: ${typingUser.username} (${typingUser.userId})`);
+          username = user.username;
         }
-      }
-      // Then try by socket.userId
-      else if (socket.userId) {
+      } else if (socket.userId) {
         const user = room.users.find(u => u.userId === socket.userId);
         if (user) {
-          typingUser = { username: user.username, userId: user.userId };
-          console.log(`Found user by socket.userId: ${typingUser.username} (${typingUser.userId})`);
+          username = user.username;
         }
-      }
-      // Then try by socketId
-      else {
+      } else {
         const user = room.users.find(u => u.socketId === socket.id);
         if (user) {
-          typingUser = { username: user.username, userId: user.userId };
-          console.log(`Found user by socketId: ${typingUser.username} (${typingUser.userId})`);
+          username = user.username;
         }
       }
 
-      // Broadcast typing notification to all other clients in the room
-      socket.to(roomId).emit("user-typing", typingUser);
+      // Broadcast single typing event to other clients
+      socket.to(roomId).emit("user-typing", { username });
     } catch (error) {
       console.error(`Error handling typing notification:`, error);
     }
   })
 
-  // Handle cursor movement
-  socket.on("cursor-move", ({ roomId, userId, position }) => {
-    if (!roomId || !userId || !position) return;
-
-    // Broadcast the cursor position to other users in the room
-    socket.to(roomId).emit("cursor-move", { userId, position });
-    // console.log(`Cursor move from user ${userId} in room ${roomId}:`, position);
-  });
+  // Cursor/caret presence feature removed intentionally
 
   // Handle user leaving a room
   socket.on("leave-room", (roomId) => {

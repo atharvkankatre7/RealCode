@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { FiSave, FiDownload, FiTrash2, FiEye, FiX, FiSearch, FiClock, FiTag } from 'react-icons/fi';
+import { FiSave, FiDownload, FiTrash2, FiEye, FiX, FiSearch, FiClock, FiTag, FiStar, FiArchive } from 'react-icons/fi';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'react-toastify';
 
@@ -35,23 +35,38 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
   const [codeFiles, setCodeFiles] = useState<CodeFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFile, setSelectedFile] = useState<CodeFile | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveTitle, setSaveTitle] = useState('');
   const [saveDescription, setSaveDescription] = useState('');
   const [saveTags, setSaveTags] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit] = useState(12);
+  const [total, setTotal] = useState(0);
 
   // Fetch code history
-  const fetchCodeHistory = async () => {
+  const fetchCodeHistory = async (pageArg?: number) => {
     if (!user?.email) return;
     
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5002/api/code-history/${encodeURIComponent(user.email)}`);
+      const currentPage = pageArg ?? page;
+      const params = new URLSearchParams();
+      params.set('page', String(currentPage));
+      params.set('limit', String(limit));
+      if (searchTerm.trim()) params.set('q', searchTerm.trim());
+
+      const response = await fetch(`http://localhost:5002/api/code-history/${encodeURIComponent(user.email)}?${params.toString()}`, {
+        headers: {
+          'x-user-email': user.email
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         setCodeFiles(data.codeHistory || []);
+        setTotal(data.total ?? (data.codeHistory?.length || 0));
       } else {
         console.error('Failed to fetch code history');
       }
@@ -69,12 +84,20 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
       return;
     }
 
+    // Enforce 200KB limit (matches backend)
+    const codeBytes = new Blob([currentCode]).size;
+    if (codeBytes > 200_000) {
+      toast.error('Code too large. Max 200 KB.');
+      return;
+    }
+
     setSaving(true);
     try {
       const response = await fetch('http://localhost:5002/api/code-history/save', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-user-email': user.email
         },
         body: JSON.stringify({
           userId: user.email,
@@ -93,7 +116,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
         setSaveTitle('');
         setSaveDescription('');
         setSaveTags('');
-        fetchCodeHistory(); // Refresh the list
+        fetchCodeHistory(1); // Refresh list and reset to first page
       } else {
         const error = await response.json();
         toast.error(error.error || 'Failed to save code');
@@ -117,6 +140,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
+          'x-user-email': user.email
         },
         body: JSON.stringify({ userId: user.email })
       });
@@ -173,7 +197,65 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
   const loadCode = (file: CodeFile) => {
     onLoadCode(file.code, file.language);
     toast.success(`Loaded ${file.title}`);
+    // Update lastOpenedAt on server (non-blocking)
+    if (user?.email) {
+      fetch(`http://localhost:5002/api/code-history/file/${file._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': user.email
+        },
+        body: JSON.stringify({ userId: user.email, lastOpenedAt: new Date().toISOString() })
+      }).catch(() => {});
+    }
     onClose();
+  };
+
+  // Toggle favorite
+  const toggleFavorite = async (file: CodeFile) => {
+    if (!user?.email) return;
+    try {
+      const res = await fetch(`http://localhost:5002/api/code-history/file/${file._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': user.email
+        },
+        body: JSON.stringify({ userId: user.email, favorite: !(file as any).favorite })
+      });
+      if (res.ok) {
+        fetchCodeHistory();
+      }
+    } catch {}
+  };
+
+  // Export ZIP
+  const exportZip = async () => {
+    if (!user?.email) return;
+    setExporting(true);
+    try {
+      const res = await fetch(`http://localhost:5002/api/code-history/export/${encodeURIComponent(user.email)}`, {
+        headers: { 'x-user-email': user.email }
+      });
+      if (!res.ok) {
+        toast.error('Failed to export ZIP');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${user.email}-code-history.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Exported ZIP');
+    } catch (e) {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+    }
   };
 
   // Filter files based on search term
@@ -196,9 +278,18 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
 
   useEffect(() => {
     if (isOpen && user?.email) {
+      fetchCodeHistory(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, user?.email]);
+
+  // Refetch on search or page change
+  useEffect(() => {
+    if (isOpen && user?.email) {
       fetchCodeHistory();
     }
-  }, [isOpen, user?.email]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, page]);
 
   if (!isOpen) return null;
 
@@ -216,6 +307,15 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
             >
               <FiSave className="w-4 h-4" />
               {saving ? 'Saving...' : 'Save Current Code'}
+            </button>
+            <button
+              onClick={exportZip}
+              className="flex items-center gap-2 px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-md transition-colors"
+              disabled={exporting}
+              title="Export all to ZIP"
+            >
+              <FiArchive className="w-4 h-4" />
+              {exporting ? 'Exporting...' : 'Export ZIP'}
             </button>
             <button
               onClick={onClose}
@@ -274,6 +374,13 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
                             </span>
                           </div>
                         </div>
+                        <button
+                          onClick={() => toggleFavorite(file)}
+                          className={`p-1 rounded ${((file as any).favorite ? 'text-yellow-400' : 'text-gray-400 hover:text-white')}`}
+                          title={((file as any).favorite ? 'Unfavorite' : 'Favorite')}
+                        >
+                          <FiStar className="w-5 h-5" />
+                        </button>
                       </div>
 
                       {/* Description */}
@@ -311,7 +418,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-2">
+                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => loadCode(file)}
                           className="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors"
@@ -346,8 +453,23 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-zinc-700 text-center text-gray-400 text-sm">
-          {codeFiles.length}/20 files saved • Most recent first
+         <div className="p-4 border-t border-zinc-700 text-center text-gray-400 text-sm">
+          <div className="flex items-center justify-between">
+            <span>{codeFiles.length}/20 files on this page • Total: {total}</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded disabled:opacity-50"
+              >Prev</button>
+              <span>Page {page} / {Math.max(1, Math.ceil(total / limit))}</span>
+              <button
+                onClick={() => setPage((p) => (p < Math.ceil(total / limit) ? p + 1 : p))}
+                disabled={page >= Math.ceil(total / limit)}
+                className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded disabled:opacity-50"
+              >Next</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -355,7 +477,19 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
       {showSaveModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-75">
           <div className="bg-zinc-900 rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-bold text-white mb-4">Save Code to History</h3>
+            <h3 className="text-lg font-bold text-white mb-2">Save Code to History</h3>
+            <div className="mb-4 text-sm">
+              {(() => {
+                const bytes = new Blob([currentCode || '']).size;
+                const kb = Math.ceil(bytes / 1024);
+                const over = bytes > 200000;
+                return (
+                  <span className={over ? 'text-red-400' : 'text-gray-300'}>
+                    Size: {kb} KB / 200 KB {over && '(Too large to save)'}
+                  </span>
+                );
+              })()}
+            </div>
             
             <div className="space-y-4">
               <div>
@@ -409,7 +543,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
               <button
                 onClick={saveCurrentCode}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors disabled:opacity-50"
-                disabled={saving || !saveTitle.trim()}
+                disabled={saving || !saveTitle.trim() || new Blob([currentCode || '']).size > 200000}
               >
                 {saving ? 'Saving...' : 'Save Code'}
               </button>

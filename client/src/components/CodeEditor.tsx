@@ -24,6 +24,7 @@ interface CodeEditorProps {
   onExecutionResult: (result: { output: string | null; error: string | null }) => void;
   onActiveUsersChange: (users: string[]) => void;
   options?: any; // Add this line for Monaco options
+  language?: string; // Controlled language from parent/context
 }
 
 export interface CodeEditorRef {
@@ -36,7 +37,7 @@ export interface CodeEditorRef {
   saveCode: () => void;
 }
 
-const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, username: initialUsername, onExecutionResult, onActiveUsersChange, options }, ref) => {
+const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, username: initialUsername, onExecutionResult, onActiveUsersChange, options, language: controlledLanguage }, ref) => {
   const {
     socket,
     isConnected,
@@ -49,7 +50,6 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
   const { user } = useAuth();
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const [code, setCode] = useState<string>("// Start coding...")
-  const [currentLanguage, setCurrentLanguage] = useState('javascript');
   const [autoSaveInterval, setAutoSaveInterval] = useState<NodeJS.Timeout | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
@@ -172,6 +172,21 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
     editorRef.current = editor;
     setIsLoading(false);
   };
+
+  // Sync language from parent/context
+  useEffect(() => {
+    if (controlledLanguage && controlledLanguage !== language) {
+      setLanguage(controlledLanguage);
+      // Optionally, also update the model language immediately for better UX
+      if (editorRef.current) {
+        const model = editorRef.current.getModel();
+        if (model) {
+          const monacoLang = controlledLanguage;
+          try { monaco.editor.setModelLanguage(model, monacoLang); } catch {}
+        }
+      }
+    }
+  }, [controlledLanguage]);
 
   // Throttled sender to reduce network & prevent echo loops
   const throttledSendCode = useRef(
@@ -602,57 +617,27 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
     // eslint-disable-next-line
   }, [isConnected, socketReady, roomId]);
 
-  // State to track cursor positions
-  const [cursorPositions, setCursorPositions] = useState<Record<string, { x: number; y: number }>>({});
-
-  // Throttled cursor movement emitter (50 ms)
-  const throttledSendCursor = useRef(
-    throttle((pos: { x: number; y: number }) => {
-      SocketService.getInstance().sendCursorMove(roomId, currentUserId || username, pos);
-    }, 50)
-  ).current;
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    throttledSendCursor({ x: e.clientX, y: e.clientY });
-  };
-
-  // Listen for cursor movement
-  useEffect(() => {
-    const handleCursorMove = ({ userId, position }: { userId: string; position: { x: number; y: number } }) => {
-      setCursorPositions((prev) => ({ ...prev, [userId]: position }));
-    };
-
-    SocketService.getInstance().on("cursor-move", handleCursorMove);
-
-    return () => {
-      SocketService.getInstance().off("cursor-move", handleCursorMove);
-    };
-  }, [roomId]);
-
-  // Render cursors
-  const renderCursors = () => {
-    return Object.entries(cursorPositions).map(([userId, position]) => (
-      <div
-        key={userId}
-        style={{
-          position: "absolute",
-          left: position.x,
-          top: position.y,
-          backgroundColor: "red",
-          width: 10,
-          height: 10,
-          borderRadius: "50%",
-          pointerEvents: "none",
-        }}
-      />
-    ));
-  };
+  
 
 
 
   // Fetch runtimes when component mounts
   useEffect(() => {
     fetchRuntimes();
+  }, []);
+
+  // Enable Monaco diagnostics for JS/TS (basic)
+  useEffect(() => {
+    try {
+      // Use TypeScript defaults to enable semantic/syntax validation
+      // @ts-ignore
+      monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
+      // @ts-ignore
+      monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
+      // Provide basic lib (optional)
+      // @ts-ignore
+      monaco.languages.typescript.javascriptDefaults.setCompilerOptions({ checkJs: true });
+    } catch {}
   }, []);
 
   // Handle request for initial code from new users
@@ -875,6 +860,8 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
       // console.error('❌ Error handling teacher cursor position:', error);
     }
   }, [isTeacher]);
+
+  
 
   // Handle teacher text highlight with enhanced error handling and multiple CSS class fallbacks
   const handleTeacherTextHighlight = useCallback((data: { selection: any; teacherName: string; teacherId: string }) => {
@@ -1287,11 +1274,23 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
     }
   }, [onActiveUsersChange, isTeacher]);
 
-  // Added handleUserTyping function
+  // Track typing timeout to prevent overlapping indicators
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Added handleUserTyping function with proper timeout clearing
   const handleUserTyping = useCallback((data: { username: string }) => {
-    // console.log(`User typing: ${data.username}`);
     setTypingUser(data.username);
-    setTimeout(() => setTypingUser(null), 2000);
+    
+    // Clear any existing timeout to prevent overlapping
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Set new timeout to clear typing indicator
+    typingTimeoutRef.current = setTimeout(() => {
+      setTypingUser(null);
+      typingTimeoutRef.current = null;
+    }, 2000);
   }, []);
 
   // Register event listeners
@@ -1467,7 +1466,7 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
     socket.emit('manual-save', {
       roomId,
       code,
-      language: currentLanguage,
+      language: language,
       userId: currentUserId
     });
   };
@@ -1482,6 +1481,7 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
 
   return (
     <div className="relative flex-1 min-w-0 flex flex-col">
+
       {/* Save Status Indicator */}
       <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
         {saveStatus === 'saving' && (
@@ -1524,6 +1524,11 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
           ...(options || {}) // Merge in options from props
         }}
       />
+      {typingUser && (
+        <div className="absolute bottom-2 left-2 z-10 bg-black/70 text-white text-xs px-3 py-1 rounded shadow">
+          <span className="font-medium">{typingUser}</span> is typing...
+        </div>
+      )}
       {/* Remove overlay for students in view-only mode to allow scroll/select/copy */}
     </div>
   );

@@ -25,7 +25,7 @@ const generateToken = (user) => {
   return jwt.sign(
     {
       email: user.email,
-      name: user.name
+      name: user.displayName || user.name || ''
     },
     JWT_SECRET,
     { expiresIn: '7d' }
@@ -47,7 +47,7 @@ router.post('/check-email', async (req, res) => {
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
-    const exists = userExists(email);
+    const exists = await userExists(email);
 
     return res.json({ exists });
   } catch (error) {
@@ -113,7 +113,7 @@ router.post('/register', async (req, res) => {
     }
 
     // Check if user already exists
-    if (userExists(email)) {
+    if (await userExists(email)) {
       return res.status(400).json({ error: 'User already exists' });
     }
 
@@ -170,12 +170,12 @@ router.post('/verify-otp', async (req, res) => {
     }
 
     // Mark user as verified if they exist
-    if (userExists(email)) {
-      verifyUser(email);
+    if (await userExists(email)) {
+      await verifyUser(email);
     }
 
     // Get user
-    const user = getUser(email);
+    const user = await getUser(email);
 
     // Generate token
     const token = user ? generateToken(user) : null;
@@ -207,7 +207,7 @@ router.post('/login', async (req, res) => {
 
     try {
       // Login user
-      const user = loginUser(email, password);
+      const user = await loginUser(email, password);
 
       // Generate token
       const token = generateToken(user);
@@ -254,7 +254,7 @@ router.post('/google', async (req, res) => {
       const { email, name, picture, sub: googleId } = payload;
 
       // Find or create a user with Google credentials
-      const user = findOrCreateGoogleUser(email, name, googleId, picture);
+      const user = await findOrCreateGoogleUser(email, name, googleId, picture);
 
       // Generate a JWT token
       const token = generateToken(user);

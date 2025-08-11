@@ -19,6 +19,9 @@ const codeHistorySchema = new mongoose.Schema({
     type: String, 
     required: true 
   },
+  favorite: { type: Boolean, default: false },
+  lastOpenedAt: { type: Date },
+  folder: { type: String },
   description: String,
   tags: [String],
   createdAt: { 
@@ -33,6 +36,9 @@ const codeHistorySchema = new mongoose.Schema({
 
 // Compound index for efficient queries and maintaining order
 codeHistorySchema.index({ userId: 1, createdAt: -1 });
+codeHistorySchema.index({ language: 1, updatedAt: -1 });
+// Text index for quick search across fields
+codeHistorySchema.index({ title: 'text', description: 'text', tags: 'text' });
 
 // Pre-save middleware to update the updatedAt field
 codeHistorySchema.pre('save', function(next) {

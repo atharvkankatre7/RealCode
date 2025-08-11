@@ -11,7 +11,8 @@ type ServerToClientEvents = {
   'user-joined': (users: Array<{ socketId: string; username: string; userId?: string; role: string }>) => void;
   'user-left': (users: Array<{ socketId: string; username: string; userId?: string }>) => void;
   'highlight-line': (data: { roomId: string; startLine: number; endLine: number; comment?: string }) => void;
-  'cursor-move': (data: { userId: string; position: { x: number; y: number } }) => void; // New event for cursor movement
+  'cursor-move': (data: { userId: string; position: { x: number; y: number } }) => void; // Mouse cursor (screen) movement
+  'caret-move': (data: { userId: string; position: { lineNumber: number; column: number } }) => void; // Text caret movement
   'room-users-updated': (data: { users: Array<any>, count?: number }) => void; // Add 'room-users-updated' to ServerToClientEvents
   'get-initial-code': (data: { requestingUserId: string; requestingUsername: string }) => void; // Request for initial code
   'initial-code-received': (data: { code: string }) => void; // Receive initial code
@@ -46,6 +47,7 @@ type ClientToServerEvents = {
   'leave-room': (roomId: string) => void;
   'highlight-line': (data: { roomId: string; startLine: number; endLine: number; comment?: string }) => void;
   'cursor-move': (data: { roomId: string; userId: string; position: { x: number; y: number } }) => void;
+  'caret-move': (data: { roomId: string; userId: string; position: { lineNumber: number; column: number } }) => void;
   'send-initial-code': (data: { roomId: string; code: string; requestingUserId: string }) => void;
   'teacher-selection': (data: { roomId: string; selection: any; teacherName?: string; teacherId?: string }) => void;
   'clear-teacher-selection': (data: { roomId: string }) => void;
@@ -233,6 +235,11 @@ class SocketService {
 
     this.socket.on('cursor-move', (data: any) => {
       this.emitEvent('cursor-move', data);
+    });
+
+    this.socket.on('caret-move', (data: any) => {
+      console.log('📥 [CARET] Socket service received caret-move:', data);
+      this.emitEvent('caret-move', data);
     });
 
     // Permission-related events
@@ -859,14 +866,23 @@ class SocketService {
     if (!this.socket) {
       throw new Error('Socket is not initialized');
     }
-    this.socket.emit('typing', { roomId, username });
+    const userId = typeof window !== 'undefined' ? window.localStorage.getItem('userId') || undefined : undefined;
+    this.socket.emit('typing', { roomId, userId });
   }
 
   sendCursorMove(roomId: string, userId: string, position: { x: number; y: number }): void {
-    if (!this.socket) {
-      throw new Error('Socket is not initialized');
+    if (this.socket?.connected) {
+      this.socket.emit('cursor-move', { roomId, userId, position });
     }
-    this.socket.emit('cursor-move', { roomId, userId, position });
+  }
+
+  sendCaretMove(roomId: string, userId: string, position: { lineNumber: number; column: number }): void {
+    if (this.socket?.connected) {
+      console.log('📤 [CARET] Sending caret-move:', { roomId, userId, position });
+      this.socket.emit('caret-move', { roomId, userId, position });
+    } else {
+      console.warn('⚠️ [CARET] Socket not connected, cannot send caret-move');
+    }
   }
 
   // Validate if a room exists

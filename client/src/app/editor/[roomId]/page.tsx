@@ -555,6 +555,7 @@ return (
                             onExecutionResult={handleExecutionResult}
                             onActiveUsersChange={handleActiveUsersChange}
                             options={{ automaticLayout: true }}
+                            language={language}
                         />
                     </div>
                     <div className="w-full mt-4">
