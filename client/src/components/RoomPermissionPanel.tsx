@@ -2,7 +2,9 @@
 
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FiUsers, FiSettings } from 'react-icons/fi';
 import { useEditPermission } from '@/context/EditPermissionContext';
+import IndividualUserPermissionPanel from './IndividualUserPermissionPanel';
 
 interface RoomPermissionPanelProps {
   isExpanded: boolean;
@@ -10,15 +12,16 @@ interface RoomPermissionPanelProps {
 }
 
 export default function RoomPermissionPanel({ isExpanded, setIsExpanded }: RoomPermissionPanelProps) {
-  const { isTeacher, canEdit, toggleRoomPermission } = useEditPermission();
+  const { isTeacher, globalCanEdit, toggleRoomPermission, isPermissionChanging } = useEditPermission();
   const [isToggling, setIsToggling] = useState(false);
+  const [showIndividualPermissions, setShowIndividualPermissions] = useState(false);
 
   // RBAC: Simple room permission toggle
   const handleRoomPermissionToggle = useCallback(() => {
-    if (!isTeacher || isToggling) return;
+    if (!isTeacher || isToggling || isPermissionChanging) return;
 
     setIsToggling(true);
-    console.log(`🎯 [RBAC] Toggling room permission. Current: ${canEdit}`);
+    console.log(`🎯 [RBAC] Toggling room permission. Current: ${globalCanEdit}`);
 
     toggleRoomPermission((err, response) => {
       if (err) {
@@ -35,7 +38,7 @@ export default function RoomPermissionPanel({ isExpanded, setIsExpanded }: RoomP
       }
       setIsToggling(false);
     });
-  }, [isTeacher, canEdit, isToggling, toggleRoomPermission]);
+  }, [isTeacher, globalCanEdit, isToggling, isPermissionChanging, toggleRoomPermission]);
 
   // Simple toast notification
   const showToast = (message: string, type: 'success' | 'error') => {
@@ -93,15 +96,15 @@ export default function RoomPermissionPanel({ isExpanded, setIsExpanded }: RoomP
               <div className="flex items-center justify-between">
                 <h3 className="text-white font-medium">Room Edit Mode</h3>
                 <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  canEdit ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                  globalCanEdit ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                 }`}>
-                  {canEdit ? 'Enabled' : 'Disabled'}
+                  {globalCanEdit ? 'Enabled' : 'Disabled'}
                 </div>
               </div>
 
               {/* Description */}
               <p className="text-zinc-400 text-sm">
-                {canEdit 
+                {globalCanEdit 
                   ? 'All students can currently edit the code.'
                   : 'Students can only view the code (read-only mode).'
                 }
@@ -110,25 +113,36 @@ export default function RoomPermissionPanel({ isExpanded, setIsExpanded }: RoomP
               {/* Toggle Button */}
               <motion.button
                 onClick={handleRoomPermissionToggle}
-                disabled={isToggling}
+                disabled={isToggling || isPermissionChanging}
                 className={`w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
-                  canEdit
+                  globalCanEdit
                     ? 'bg-red-500 hover:bg-red-600 text-white'
                     : 'bg-green-500 hover:bg-green-600 text-white'
-                } ${isToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
-                whileHover={!isToggling ? { scale: 1.02 } : {}}
-                whileTap={!isToggling ? { scale: 0.98 } : {}}
+                } ${(isToggling || isPermissionChanging) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                whileHover={!(isToggling || isPermissionChanging) ? { scale: 1.02 } : {}}
+                whileTap={!(isToggling || isPermissionChanging) ? { scale: 0.98 } : {}}
               >
-                {isToggling ? (
+                {(isToggling || isPermissionChanging) ? (
                   <div className="flex items-center justify-center gap-2">
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     <span>Updating...</span>
                   </div>
                 ) : (
                   <span>
-                    {canEdit ? '🔒 Disable Editing' : '✏️ Enable Editing'}
+                    {globalCanEdit ? '🔒 Disable Editing' : '✏️ Enable Editing'}
                   </span>
                 )}
+              </motion.button>
+
+              {/* Individual User Permissions Button */}
+              <motion.button
+                onClick={() => setShowIndividualPermissions(true)}
+                className="w-full py-3 px-4 rounded-xl font-medium bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 flex items-center justify-center gap-2"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <FiUsers className="w-4 h-4" />
+                Manage Individual Permissions
               </motion.button>
 
               {/* Info */}
@@ -138,6 +152,7 @@ export default function RoomPermissionPanel({ isExpanded, setIsExpanded }: RoomP
                   <div>
                     <p className="font-medium mb-1">Role-Based Access Control</p>
                     <p>Teachers can always edit. This setting controls whether students can edit the code.</p>
+                    <p className="mt-1 text-blue-400">Individual permissions can override room-wide settings.</p>
                   </div>
                 </div>
               </div>
@@ -145,6 +160,12 @@ export default function RoomPermissionPanel({ isExpanded, setIsExpanded }: RoomP
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Individual User Permission Panel */}
+      <IndividualUserPermissionPanel
+        isOpen={showIndividualPermissions}
+        onClose={() => setShowIndividualPermissions(false)}
+      />
     </div>
   );
 }

@@ -5,6 +5,42 @@
 @import "tailwindcss";
 @import "../styles/editor-permissions.css";
 
+/* Monaco Editor Custom Styling */
+.monaco-editor .margin {
+  background-color: rgba(51, 65, 85, 0.2) !important;
+}
+
+.monaco-editor .line-numbers {
+  color: #64748b !important;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace !important;
+}
+
+.monaco-editor .line-numbers:hover {
+  color: #94a3b8 !important;
+}
+
+.monaco-editor .current-line {
+  background-color: rgba(34, 211, 238, 0.1) !important;
+  border-left: 2px solid #06b6d4 !important;
+}
+
+.monaco-editor .cursor {
+  background-color: #06b6d4 !important;
+  border-color: #06b6d4 !important;
+}
+
+.monaco-editor .selection {
+  background-color: rgba(34, 211, 238, 0.2) !important;
+}
+
+.monaco-editor .scrollbar .slider {
+  background-color: rgba(148, 163, 184, 0.3) !important;
+}
+
+.monaco-editor .scrollbar .slider:hover {
+  background-color: rgba(148, 163, 184, 0.5) !important;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -46,8 +82,10 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: 'Inter', var(--font-sans), Arial, Helvetica, sans-serif;
   overflow-x: hidden;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  font-variation-settings: 'opsz' 32;
 }
 
 html, body, #__next {
@@ -469,4 +507,110 @@ html, body, #__next {
 
 .hover\:bg-zinc-750:hover {
   background-color: rgb(63 63 70 / 1);
+}
+
+/* Modern Typography */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Enhanced UI Components */
+.glass-effect {
+  @apply bg-slate-800/40 backdrop-blur-sm border border-slate-700/30;
+}
+
+.hover-lift {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* Tech-oriented button styles */
+.btn-tech {
+  @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+  color: white;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.btn-tech:hover {
+  background: linear-gradient(135deg, #0284c7 0%, #0891b2 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px -5px rgba(6, 182, 212, 0.4);
+}
+
+.btn-tech:active {
+  transform: translateY(0);
+}
+
+/* Smooth transitions for all interactive elements */
+* {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+/* Custom scrollbar styling */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* Modern shadow system */
+.shadow-tech {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.shadow-tech-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.shadow-tech-xl {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Responsive utilities */
+@media (max-width: 640px) {
+  .btn-tech {
+    @apply px-3 py-1.5 text-sm;
+  }
+  
+  .glass-effect {
+    @apply bg-slate-800/60;
+  }
+}
+
+/* Focus states for accessibility */
+.focus-ring:focus {
+  outline: 2px solid #06b6d4;
+  outline-offset: 2px;
+}
+
+/* Loading states */
+.loading-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
 }

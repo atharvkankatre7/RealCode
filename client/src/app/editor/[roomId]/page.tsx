@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation"
 import { useEffect, useState, useRef } from "react"
 import dynamic from "next/dynamic"
+import { motion } from "framer-motion"
 import ProtectedRoute from "@/components/ProtectedRoute"
 import { EditPermissionProvider } from "@/context/EditPermissionContext"
 import { EditorPermissionStatus } from "@/components/PermissionBadge"
@@ -14,6 +15,7 @@ import ReactDOM from "react-dom";
 import TerminalPanel from "@/components/TerminalPanel";
 import { LanguageProvider, useLanguage } from '@/context/LanguageContext';
 import CodeHistoryPanel from "@/components/CodeHistoryPanel";
+import IndividualUserPermissionPanel from "@/components/IndividualUserPermissionPanel";
 
 // Dynamic import for CodeEditor to avoid SSR issues
 const CodeEditor = dynamic(() => import("@/components/CodeEditor"), {
@@ -105,13 +107,17 @@ function Popover({ trigger, children }: { trigger: React.ReactNode; children: Re
   }, [open]);
 
   const dropdown = open ? (
-    <div
+    <motion.div
       ref={ref}
       style={dropdownStyle}
-      className="bg-zinc-900 rounded-lg shadow-lg p-2"
+      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      className="bg-zinc-900/95 backdrop-blur-sm rounded-xl shadow-xl border border-white/5"
     >
       {children}
-    </div>
+    </motion.div>
   ) : null;
 
   return (
@@ -149,12 +155,14 @@ return `rgb(${r}, ${g}, ${b})`;
 }
 
 const TopNavbar = ({ roomId, onRun, onCopy, onFormat, onLanguageChange, language, activeUsers, user, logout, theme, toggleTheme, onOpenHistory }: any) => {
-const { canEdit, isTeacher, toggleRoomPermission } = useEditPermission();
+  const { users, globalCanEdit, isTeacher, toggleRoomPermission } = useEditPermission();
+  const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
 const [isRoomToggling, setIsRoomToggling] = useState(false);
 const [showProfile, setShowProfile] = useState(false);
 const [showUsers, setShowUsers] = useState(false);
 const [showRoomControl, setShowRoomControl] = useState(false);
 const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // NEW: mobile drawer state
+const [showIndividualPermissions, setShowIndividualPermissions] = useState(false);
 const isDark = theme === 'dark';
 const initials = user?.email ? user.email[0].toUpperCase() : 'U';
 const avatarColor = user?.email ? stringToColor(user.email) : '#888888';
@@ -190,10 +198,10 @@ useEffect(() => {
 }, [mobileMenuOpen]);
 
 return (
-<div className="w-full flex items-center px-4 py-2 justify-between gap-2 relative">
+<div className="w-full flex items-center px-6 py-4 justify-between gap-4 relative bg-slate-900/80 border-b border-slate-800/30">
     {/* Hamburger for mobile */}
     <button
-      className="lg:hidden flex items-center justify-center min-w-[44px] min-h-[44px] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mr-2"
+      className="lg:hidden flex items-center justify-center w-9 h-9 rounded-md bg-slate-800/40 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all duration-200 mr-3"
       aria-label="Open menu"
       aria-expanded={mobileMenuOpen}
       aria-controls="mobile-navbar-drawer"
@@ -201,86 +209,267 @@ return (
       tabIndex={0}
       type="button"
     >
-      <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
     </button>
     {/* Left: App/Room Name */}
-    <div className="flex items-center gap-2 min-w-0 flex-1">
-        <h1 className="text-xl font-bold text-white truncate">
-            RealCode <span className="text-sm font-normal text-gray-400">- Room: {roomId}</span>
-        </h1>
+    <div className="flex items-center gap-4 min-w-0 flex-1">
+        <h1 className="text-lg font-semibold text-white truncate tracking-tight">RealCode</h1>
+        <div className="bg-cyan-500/10 rounded-lg px-3 py-1.5 text-xs font-medium text-cyan-300 border border-cyan-500/20">
+          Room: {roomId}
+        </div>
     </div>
     {/* Key Actions: Always visible, responsive layout */}
-    <div className="flex items-center gap-0.5 sm:gap-1 ml-auto flex-wrap overflow-x-auto no-scrollbar">
-        {/* Language Selector */}
+    <div className="flex items-center gap-3 ml-auto flex-wrap overflow-x-auto no-scrollbar">
+        {/* Enhanced Language Selector */}
         <Popover
-            trigger={<button className="flex items-center justify-center gap-0.5 bg-gray-700 text-white text-sm rounded-md p-1 sm:px-2 sm:py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-600 transition min-w-[44px] min-h-[44px]" aria-label="Select language"><span>{languageOptions.find(l => l.value === language)?.icon}</span><span className="hidden md:inline">{languageOptions.find(l => l.value === language)?.label}</span></button>}
+            trigger={<button className="flex items-center gap-2 bg-slate-800/40 hover:bg-cyan-500/20 text-slate-200 hover:text-cyan-300 text-sm rounded-lg px-3 py-2 border border-slate-700/50 hover:border-cyan-500/30 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all duration-200 shadow-sm hover:shadow-md" aria-label="Select language">
+                <span className="text-base">{languageOptions.find(l => l.value === language)?.icon}</span>
+                <span className="hidden md:inline font-medium">{languageOptions.find(l => l.value === language)?.label}</span>
+            </button>}
         >
-            <div className="bg-zinc-900 rounded-lg shadow-lg p-2 min-w-[120px]">
-                {languageOptions.map((lang) => (
-                    <button key={lang.value} onClick={() => onLanguageChange(lang.value)} className={`flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm text-white hover:bg-zinc-800 transition ${language === lang.value ? 'bg-zinc-800 font-bold' : ''}`}>{lang.icon}{lang.label}</button>
-                ))}
+            <div className="bg-zinc-900/95 backdrop-blur-sm rounded-xl shadow-xl border border-white/5 p-3 min-w-[200px]">
+                {/* Language Categories */}
+                <div className="space-y-3">
+                    {/* Web Languages */}
+                    <div>
+                        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 px-1">Web</h4>
+                        <div className="space-y-1">
+                            {languageOptions.filter(lang => ['javascript', 'typescript'].includes(lang.value)).map((lang) => (
+                                <motion.button 
+                                    key={lang.value} 
+                                    onClick={() => {
+                                        onLanguageChange(lang.value);
+                                        // Close dropdown after selection
+                                        const event = new Event('mousedown');
+                                        document.dispatchEvent(event);
+                                    }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-white transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                        language === lang.value 
+                                            ? 'bg-white/10 border-l-2 border-yellow-400 shadow-md' 
+                                            : 'hover:bg-white/5'
+                                    }`}
+                                    aria-label={`Select ${lang.label} language`}
+                                    title={`${lang.label} - Modern web development`}
+                                >
+                                    <span className="text-base">{lang.icon}</span>
+                                    <span className={`font-medium ${language === lang.value ? 'text-white' : 'text-zinc-200'}`}>
+                                        {lang.label}
+                                    </span>
+                                    {language === lang.value && (
+                                        <motion.div 
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"
+                                        />
+                                    )}
+                                </motion.button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* General Purpose Languages */}
+                    <div>
+                        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 px-1">General Purpose</h4>
+                        <div className="space-y-1">
+                            {languageOptions.filter(lang => ['python', 'java', 'csharp', 'cpp'].includes(lang.value)).map((lang) => (
+                                <motion.button 
+                                    key={lang.value} 
+                                    onClick={() => {
+                                        onLanguageChange(lang.value);
+                                        // Close dropdown after selection
+                                        const event = new Event('mousedown');
+                                        document.dispatchEvent(event);
+                                    }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-white transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                        language === lang.value 
+                                            ? 'bg-white/10 border-l-2 border-blue-400 shadow-md' 
+                                            : 'hover:bg-white/5'
+                                    }`}
+                                    aria-label={`Select ${lang.label} language`}
+                                    title={`${lang.label} - General purpose programming`}
+                                >
+                                    <span className="text-base">{lang.icon}</span>
+                                    <span className={`font-medium ${language === lang.value ? 'text-white' : 'text-zinc-200'}`}>
+                                        {lang.label}
+                                    </span>
+                                    {language === lang.value && (
+                                        <motion.div 
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            className="ml-auto w-2 h-2 bg-blue-400 rounded-full"
+                                        />
+                                    )}
+                                </motion.button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* Modern Languages */}
+                    <div>
+                        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 px-1">Modern</h4>
+                        <div className="space-y-1">
+                            {languageOptions.filter(lang => ['ruby', 'go', 'rust'].includes(lang.value)).map((lang) => (
+                                <motion.button 
+                                    key={lang.value} 
+                                    onClick={() => {
+                                        onLanguageChange(lang.value);
+                                        // Close dropdown after selection
+                                        const event = new Event('mousedown');
+                                        document.dispatchEvent(event);
+                                    }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-white transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                        language === lang.value 
+                                            ? 'bg-white/10 border-l-2 border-emerald-400 shadow-md' 
+                                            : 'hover:bg-white/5'
+                                    }`}
+                                    aria-label={`Select ${lang.label} language`}
+                                    title={`${lang.label} - Modern systems programming`}
+                                >
+                                    <span className="text-base">{lang.icon}</span>
+                                    <span className={`font-medium ${language === lang.value ? 'text-white' : 'text-zinc-200'}`}>
+                                        {lang.label}
+                                    </span>
+                                    {language === lang.value && (
+                                        <motion.div 
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            className="ml-auto w-2 h-2 bg-emerald-400 rounded-full"
+                                        />
+                                    )}
+                                </motion.button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
             </div>
         </Popover>
-        {/* Run Button */}
-        <button onClick={onRun} className="flex items-center justify-center gap-0.5 px-1 sm:px-2 py-1 sm:py-2 bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-400 text-white shadow border-l border-gray-600/50 min-w-[44px] min-h-[44px] rounded-md" title="Run code (Ctrl+Enter)" aria-label="Run code"><FiPlay /><span className="hidden md:inline">Run</span></button>
+        {/* Run Button with Enhanced Styling */}
+        <button 
+          onClick={onRun} 
+          className="group flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 focus:ring-2 focus:ring-cyan-500/50 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-cyan-500/25 active:scale-95 transform hover:-translate-y-1" 
+          title="Run code (Ctrl+Enter)" 
+          aria-label="Run code"
+        >
+          <FiPlay className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" />
+          <span className="hidden md:inline text-base">Run</span>
+        </button>
+        
         {/* Copy Button (hide on xs) */}
-        <button onClick={onCopy} className="hidden xs:inline-flex items-center justify-center p-1 sm:p-2 hover:bg-gray-600 focus:outline-none min-w-[44px] min-h-[44px] rounded-md" title="Copy code (Ctrl+C)" aria-label="Copy code"><FiCopy className="text-white" /></button>
+        <button 
+          onClick={onCopy} 
+          className="hidden xs:flex items-center justify-center w-10 h-10 rounded-xl bg-slate-800/60 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 active:scale-95 hover:shadow-lg hover:shadow-cyan-500/20" 
+          title="Copy code (Ctrl+C)" 
+          aria-label="Copy code"
+        >
+          <FiCopy className="w-4 h-4" />
+        </button>
+        
         {/* Format Button (hide on xs) */}
-        <button onClick={onFormat} className="hidden xs:inline-flex items-center justify-center p-1 sm:p-2 hover:bg-gray-600 focus:outline-none min-w-[44px] min-h-[44px] rounded-md" title="Format code (Shift+Alt+F)" aria-label="Format code"><FiAlignLeft className="text-white" /></button>
+        <button 
+          onClick={onFormat} 
+          className="hidden xs:flex items-center justify-center w-10 h-10 rounded-xl bg-slate-800/60 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 active:scale-95 hover:shadow-lg hover:shadow-cyan-500/20" 
+          title="Format code (Shift+Alt+F)" 
+          aria-label="Format code"
+        >
+          <FiAlignLeft className="w-4 h-4" />
+        </button>
+        
         {/* Code History Button */}
-        <button onClick={onOpenHistory} className="flex items-center justify-center p-1 sm:p-2 hover:bg-gray-600 focus:outline-none min-w-[44px] min-h-[44px] rounded-md" title="Code History" aria-label="Code History"><FiClock className="text-white" /></button>
+        <button 
+          onClick={onOpenHistory} 
+          className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-800/60 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-300 focus:ring-2 focus:ring-cyan-500/50 active:scale-95 hover:shadow-lg hover:shadow-cyan-500/20" 
+          title="Code History" 
+          aria-label="Code History"
+        >
+          <FiClock className="w-4 h-4" />
+        </button>
         {/* User List Button */}
         <Popover
-            trigger={<button className="flex items-center justify-center w-10 h-10 rounded-full bg-zinc-800 hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 shadow min-w-[44px] min-h-[44px]" aria-label="Show users"><FiUsers className="text-lg text-blue-400" /></button>}
+            trigger={<button className="flex items-center justify-center w-8 h-8 rounded-md bg-slate-800/40 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 shadow-sm hover:shadow-md active:scale-95" aria-label="Show users"><FiUsers className="w-4 h-4 text-cyan-400" /></button>}
         >
-            <div className="bg-zinc-900 rounded-lg shadow-lg p-2 min-w-[220px] max-w-xs">
-                <div className="px-4 py-2 text-xs text-gray-400 font-semibold border-b border-zinc-800">Active Users ({activeUsers.length})</div>
-                <div className="max-h-60 overflow-y-auto divide-y divide-zinc-800">
-                {activeUsers
-                    .map((u: string, i: number) => {
-                    const isTeacher = u.toLowerCase().includes('teacher');
-                    const isCurrent = u.toLowerCase().includes('(you)');
-                    const username = u.replace(/\s*\(you\).*/, '').replace(/\s*\(teacher\).*/, '').replace(/\s*\(student\).*/, '').trim();
-                    return { u, isTeacher, isCurrent, username };
-                    })
-                    .sort((a: { isTeacher: boolean }, b: { isTeacher: boolean }) => (a.isTeacher ? -1 : 1))
-                    .map(({ u, isTeacher, isCurrent, username }: { u: string, isTeacher: boolean, isCurrent: boolean, username: string }, i: number) => (
-                    <div
-                        key={u + i}
-                        className={`flex items-center gap-2 px-4 py-2 hover:bg-zinc-800 transition-colors ${isTeacher ? 'border-l-4 border-blue-500 bg-blue-950/30' : ''}`}
-                    >
-                        <span
-                        className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-gray-900 mr-2 border border-gray-300 shadow-sm"
-                        style={{ backgroundColor: lightenColor(stringToColor(username), 0.7) }}
-                        >
-                        {username[0]?.toUpperCase() || 'U'}
-                        </span>
-                        <span className="font-medium text-white text-sm">{username}{isCurrent ? ' (you)' : ''}</span>
-                        <span
-                        className={`ml-auto px-2 py-0.5 rounded text-xs font-medium ${isTeacher ? '' : ''}`}
-                        style={{
-                            backgroundColor: isTeacher ? 'rgba(59,130,246,0.12)' : 'rgba(16,185,129,0.12)',
-                            color: isTeacher ? '#3b82f6' : '#10b981',
-                            opacity: 2.5,
-                            fontWeight: 300,
-                        }}
-                        >
-                        {isTeacher ? 'teacher' : 'student'}
-                        </span>
+            <div className="bg-zinc-900/95 backdrop-blur-sm rounded-xl shadow-xl border border-white/5 p-3 min-w-[240px] max-w-xs">
+                {/* Enhanced Title */}
+                <div className="px-2 py-2 mb-2">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-base font-semibold text-white">Active Users</h3>
+                        <span className="text-sm text-zinc-400 font-medium">({users.length})</span>
                     </div>
-                    ))}
+                </div>
+                
+                {/* Enhanced User List */}
+                <div className="max-h-60 overflow-y-auto space-y-1">
+                {users
+                    .sort((a, b) => (a.role === 'teacher' ? -1 : 1))
+                    .map((user, i: number) => {
+                    const isCurrent = user.userId === currentUserId;
+                    return (
+                    <motion.div
+                        key={user.userId}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2, delay: i * 0.05 }}
+                        className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/5 transition-all duration-150 group"
+                    >
+                        {/* Enhanced Avatar */}
+                        <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center font-semibold text-gray-900 shadow-sm border border-gray-300/50"
+                        style={{ backgroundColor: lightenColor(stringToColor(user.username), 0.7) }}
+                        >
+                        {user.username[0]?.toUpperCase() || 'U'}
+                        </div>
+                        
+                        {/* Username with enhanced styling */}
+                        <div className="flex-1 min-w-0">
+                            <span className="font-medium text-white text-sm">{user.username}</span>
+                            {isCurrent && (
+                                <span className="ml-2 text-xs text-zinc-400 font-normal">(you)</span>
+                            )}
+                        </div>
+                        
+                        {/* Enhanced Role Badge */}
+                        <div
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            user.role === 'teacher'
+                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                                : 'bg-green-500/20 text-green-400 border border-green-500/30'
+                        }`}
+                        >
+                        {user.role}
+                        </div>
+                    </motion.div>
+                    );
+                    })}
                 </div>
             </div>
         </Popover>
         {/* Permission Button - Responsive */}
         {isTeacher && (
           <Popover
-            trigger={<button className={`flex items-center justify-center w-10 h-10 rounded-full border border-slate-600 bg-zinc-800 text-white font-semibold transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm hover:bg-zinc-700 active:scale-[.97] min-w-[44px] min-h-[44px]`} aria-label="Change room permission" title="Change permission for this room">
-              {canEdit ? <FiUnlock className="w-5 h-5" /> : <FiLock className="w-5 h-5" />}
+            trigger={<button className={`flex items-center justify-center w-8 h-8 rounded-md bg-slate-800/40 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 shadow-sm hover:shadow-md active:scale-95`} aria-label="Change room permission" title="Change permission for this room">
+              {globalCanEdit ? <FiUnlock className="w-4 h-4" /> : <FiLock className="w-4 h-4" />}
             </button>}
           >
-            <div className="bg-zinc-900 rounded-lg shadow-lg p-4 min-w-[220px] max-w-xs flex flex-col items-center">
-              <span className="text-white font-semibold mb-2">Room Permission</span>
+            <div className="bg-zinc-900/95 backdrop-blur-sm rounded-xl shadow-xl border border-white/5 p-5 min-w-[240px] max-w-xs flex flex-col items-center">
+              {/* Title with Badge */}
+              <div className="flex flex-col items-center mb-3">
+                <h3 className="text-lg font-bold text-white mb-1">Room Permission</h3>
+                <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  globalCanEdit 
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                }`}>
+                  {globalCanEdit ? '✏️ Editable' : '👁️ View Only'}
+                </div>
+              </div>
+
+              {/* Main Toggle Button */}
               <button
                 onClick={() => {
                   if (isRoomToggling) return;
@@ -288,24 +477,57 @@ return (
                   toggleRoomPermission(() => setIsRoomToggling(false));
                 }}
                 disabled={isRoomToggling}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md border border-slate-600 bg-blue-600 text-white font-semibold transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm hover:bg-blue-700 active:scale-[.97] min-w-[44px] min-h-[44px] ${isRoomToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`flex items-center justify-center gap-3 px-5 py-3 rounded-lg border border-slate-600/50 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm hover:shadow-md hover:from-blue-600 hover:to-blue-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${isRoomToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
                 aria-label="Toggle room permission"
-                title="Change permission for this room"
+                title={globalCanEdit ? "Click to make room view-only" : "Click to make room editable"}
               >
-                {canEdit ? <FiLock className="w-5 h-5" /> : <FiUnlock className="w-5 h-5" />}
-                <span>{canEdit ? 'Set to View Only' : 'Set to Editable'}</span>
+                <motion.div
+                  animate={{ rotate: isRoomToggling ? 180 : 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {globalCanEdit ? <FiLock className="w-4 h-4" /> : <FiUnlock className="w-4 h-4" />}
+                </motion.div>
+                <span>{globalCanEdit ? 'Set to View Only' : 'Set to Editable'}</span>
               </button>
-              <span className="mt-2 text-xs text-gray-400">Current: {canEdit ? 'Editable' : 'View Only'}</span>
+
+              {/* Current Status */}
+              <motion.div
+                key={globalCanEdit ? 'editable' : 'viewonly'}
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="mt-3 text-sm text-zinc-400"
+              >
+                Current: {globalCanEdit ? 'Editable' : 'View Only'}
+              </motion.div>
+              
+              {/* Divider */}
+              <div className="w-full h-px bg-zinc-700/50 my-3"></div>
+              
+              {/* Individual User Permissions Button */}
+              <button
+                onClick={() => setShowIndividualPermissions(true)}
+                className="w-full py-2.5 px-5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-medium transition-all duration-200 flex items-center justify-center gap-2 border border-zinc-600/50 hover:border-zinc-500/50 shadow-sm hover:shadow-md"
+              >
+                <FiUsers className="w-4 h-4" />
+                Manage Individual Permissions
+              </button>
             </div>
           </Popover>
         )}
         {/* Theme Toggle Switch */}
-        <button onClick={toggleTheme} className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 transition focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[44px] min-h-[44px]" title="Toggle theme" aria-label="Toggle theme">
-            {isDark ? <FiSun className="text-yellow-300" /> : <FiMoon className="text-blue-400" />}
+        <button 
+          onClick={toggleTheme} 
+          className="flex items-center justify-center w-8 h-8 rounded-md bg-slate-800/40 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 shadow-sm hover:shadow-md active:scale-95" 
+          title="Toggle theme" 
+          aria-label="Toggle theme"
+        >
+            {isDark ? <FiSun className="w-4 h-4 text-yellow-400" /> : <FiMoon className="w-4 h-4 text-cyan-400" />}
         </button>
+        
         {/* User Avatar Dropdown */}
         <Popover
-            trigger={<button className="w-10 h-10 rounded-full flex items-center justify-center border-2 border-gray-600 shadow bg-white/10 min-w-[44px] min-h-[44px]" style={{ backgroundColor: avatarColor }} aria-label="User menu"><span className="text-white font-bold text-lg">{initials}</span></button>}
+            trigger={<button className="w-8 h-8 rounded-md flex items-center justify-center border border-slate-600/50 shadow-sm bg-slate-800/40 hover:bg-cyan-500/20 transition-all duration-200 active:scale-95" style={{ backgroundColor: avatarColor }} aria-label="User menu"><span className="text-white font-semibold text-sm">{initials}</span></button>}
         >
             <div className="bg-zinc-900 rounded-lg shadow-lg p-4 min-w-[180px]">
                 {user && <div className="px-2 py-2 text-sm text-gray-300 border-b border-gray-600 mb-2">{user.email}</div>}
@@ -332,14 +554,133 @@ return (
           >
             <span className="text-2xl">×</span>
           </button>
-          {/* Language Selector */}
+          {/* Enhanced Language Selector */}
           <Popover
-            trigger={<button className="flex items-center gap-2 bg-gray-700 text-white text-sm rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-600 transition min-w-[44px] min-h-[44px]" aria-label="Select language"><span>{languageOptions.find(l => l.value === language)?.icon}</span>{languageOptions.find(l => l.value === language)?.label}</button>}
+            trigger={<button className="flex items-center gap-2 bg-slate-800/40 hover:bg-cyan-500/20 text-slate-200 hover:text-cyan-300 text-sm rounded-lg px-3 py-2 border border-slate-700/50 hover:border-cyan-500/30 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all duration-200 shadow-sm hover:shadow-md" aria-label="Select language">
+              <span className="text-base">{languageOptions.find(l => l.value === language)?.icon}</span>
+              <span className="font-medium">{languageOptions.find(l => l.value === language)?.label}</span>
+            </button>}
           >
-            <div className="bg-zinc-900 rounded-lg shadow-lg p-2 min-w-[160px]">
-              {languageOptions.map((lang) => (
-                <button key={lang.value} onClick={() => onLanguageChange(lang.value)} className={`flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm text-white hover:bg-zinc-800 transition ${language === lang.value ? 'bg-zinc-800 font-bold' : ''}`}>{lang.icon}{lang.label}</button>
-              ))}
+            <div className="bg-zinc-900/95 backdrop-blur-sm rounded-xl shadow-xl border border-white/5 p-3 min-w-[200px]">
+                {/* Language Categories */}
+                <div className="space-y-3">
+                    {/* Web Languages */}
+                    <div>
+                        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 px-1">Web</h4>
+                        <div className="space-y-1">
+                            {languageOptions.filter(lang => ['javascript', 'typescript'].includes(lang.value)).map((lang) => (
+                                <motion.button 
+                                    key={lang.value} 
+                                    onClick={() => {
+                                        onLanguageChange(lang.value);
+                                        // Close dropdown after selection
+                                        const event = new Event('mousedown');
+                                        document.dispatchEvent(event);
+                                    }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-white transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                        language === lang.value 
+                                            ? 'bg-white/10 border-l-2 border-yellow-400 shadow-md' 
+                                            : 'hover:bg-white/5'
+                                    }`}
+                                    aria-label={`Select ${lang.label} language`}
+                                    title={`${lang.label} - Modern web development`}
+                                >
+                                    <span className="text-base">{lang.icon}</span>
+                                    <span className={`font-medium ${language === lang.value ? 'text-white' : 'text-zinc-200'}`}>
+                                        {lang.label}
+                                    </span>
+                                    {language === lang.value && (
+                                        <motion.div 
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            className="ml-auto w-2 h-2 bg-yellow-400 rounded-full"
+                                        />
+                                    )}
+                                </motion.button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* General Purpose Languages */}
+                    <div>
+                        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 px-1">General Purpose</h4>
+                        <div className="space-y-1">
+                            {languageOptions.filter(lang => ['python', 'java', 'csharp', 'cpp'].includes(lang.value)).map((lang) => (
+                                <motion.button 
+                                    key={lang.value} 
+                                    onClick={() => {
+                                        onLanguageChange(lang.value);
+                                        // Close dropdown after selection
+                                        const event = new Event('mousedown');
+                                        document.dispatchEvent(event);
+                                    }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-white transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                        language === lang.value 
+                                            ? 'bg-white/10 border-l-2 border-blue-400 shadow-md' 
+                                            : 'hover:bg-white/5'
+                                    }`}
+                                    aria-label={`Select ${lang.label} language`}
+                                    title={`${lang.label} - General purpose programming`}
+                                >
+                                    <span className="text-base">{lang.icon}</span>
+                                    <span className={`font-medium ${language === lang.value ? 'text-white' : 'text-zinc-200'}`}>
+                                        {lang.label}
+                                    </span>
+                                    {language === lang.value && (
+                                        <motion.div 
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            className="ml-auto w-2 h-2 bg-blue-400 rounded-full"
+                                        />
+                                    )}
+                                </motion.button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* Modern Languages */}
+                    <div>
+                        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 px-1">Modern</h4>
+                        <div className="space-y-1">
+                            {languageOptions.filter(lang => ['ruby', 'go', 'rust'].includes(lang.value)).map((lang) => (
+                                <motion.button 
+                                    key={lang.value} 
+                                    onClick={() => {
+                                        onLanguageChange(lang.value);
+                                        // Close dropdown after selection
+                                        const event = new Event('mousedown');
+                                        document.dispatchEvent(event);
+                                    }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-white transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                        language === lang.value 
+                                            ? 'bg-white/10 border-l-2 border-emerald-400 shadow-md' 
+                                            : 'hover:bg-white/5'
+                                    }`}
+                                    aria-label={`Select ${lang.label} language`}
+                                    title={`${lang.label} - Modern systems programming`}
+                                >
+                                    <span className="text-base">{lang.icon}</span>
+                                    <span className={`font-medium ${language === lang.value ? 'text-white' : 'text-zinc-200'}`}>
+                                        {lang.label}
+                                    </span>
+                                    {language === lang.value && (
+                                        <motion.div 
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            className="ml-auto w-2 h-2 bg-emerald-400 rounded-full"
+                                        />
+                                    )}
+                                </motion.button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
             </div>
           </Popover>
           {/* Action Buttons Group */}
@@ -362,7 +703,7 @@ return (
               aria-label="Toggle room permission"
               title="Change permission for this room"
             >
-              {canEdit ? <FiUnlock className="w-5 h-5" /> : <FiLock className="w-5 h-5" />}
+              {globalCanEdit ? <FiUnlock className="w-5 h-5" /> : <FiLock className="w-5 h-5" />}
               <span>Change Permission</span>
             </button>
           )}
@@ -380,6 +721,12 @@ return (
         </nav>
       </div>
     )}
+
+    {/* Individual User Permission Panel */}
+    <IndividualUserPermissionPanel
+      isOpen={showIndividualPermissions}
+      onClose={() => setShowIndividualPermissions(false)}
+    />
 </div>
 );
 };
@@ -461,6 +808,9 @@ const [copied, setCopied] = useState(false);
 const [runCodeString, setRunCodeString] = useState<string | undefined>(undefined);
 const [userInput, setUserInput] = useState<string>("");
 const [showHistory, setShowHistory] = useState(false);
+const [terminalCollapsed, setTerminalCollapsed] = useState(false);
+const [terminalWidth, setTerminalWidth] = useState(320); // Default width in pixels
+const [isResizing, setIsResizing] = useState(false);
 
 useEffect(() => {
 if (!roomId) return;
@@ -476,6 +826,47 @@ if (typeof window !== "undefined") {
     }
 }
 }, [roomId]);
+
+// Terminal resize handlers
+const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+};
+
+useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+        if (!isResizing) return;
+        
+        const containerWidth = window.innerWidth;
+        const newWidth = containerWidth - e.clientX;
+        
+        // Minimum width: 250px, Maximum width: 60% of screen
+        const minWidth = 250;
+        const maxWidth = containerWidth * 0.6;
+        
+        if (newWidth >= minWidth && newWidth <= maxWidth) {
+            setTerminalWidth(newWidth);
+        }
+    };
+    
+    const handleMouseUp = () => {
+        setIsResizing(false);
+    };
+    
+    if (isResizing) {
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    }
+    
+    return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    };
+}, [isResizing]);
 
 const handleRunCode = () => {
   const code = editorRef.current?.getValue() || "";
@@ -525,9 +916,9 @@ return <div>Error: Room ID is missing. Please join a valid room.</div>;
 return (
 <ProtectedRoute>
     <EditPermissionProvider>
-        <div className="w-screen h-screen flex flex-col overflow-x-hidden overflow-y-hidden bg-gradient-to-br from-[#10131a] via-[#181c2a] to-[#0e0e0e] relative">
-            {/* Sticky Top Navbar */}
-            <div className="sticky top-0 z-30 shadow-lg border-b border-zinc-800 bg-[#1f2333]/95 backdrop-blur-md">
+        <div className="w-screen h-screen flex flex-col overflow-x-hidden overflow-y-hidden bg-gradient-to-br from-[#0a0a0f] via-[#111827] to-[#0f172a] relative">
+            {/* Sticky Top Navbar with Glassmorphism */}
+            <div className="sticky top-0 z-30 shadow-2xl border-b border-white/10 bg-slate-900/80 backdrop-blur-xl">
                 <TopNavbar 
                     roomId={roomId} 
                     onRun={handleRunCode}
@@ -543,10 +934,10 @@ return (
                     onOpenHistory={handleOpenHistory}
                 />
             </div>
-            {/* Main Content Area */}
+            {/* Main Content Area with Grid Alignment */}
             <div className="flex flex-col lg:flex-row flex-1 w-full h-full overflow-hidden min-w-0 p-0 gap-0">
-                {/* Editor Area */}
-                <div className="flex-1 min-w-0 min-h-[300px] w-full h-full flex flex-col overflow-hidden bg-zinc-900/90 shadow-2xl border-2 border-zinc-800 relative p-3 sm:p-6 transition-all duration-200">
+                {/* Editor Area with Enhanced Styling */}
+                <div className="flex-1 min-w-0 min-h-[300px] w-full h-full flex flex-col overflow-hidden bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 shadow-2xl border-r border-white/10 relative p-6 transition-all duration-300 custom-scrollbar rounded-r-2xl">
                     <div className="editor-container flex-1 min-w-0 w-full h-full flex flex-col">
                         <CodeEditor
                             ref={editorRef}
@@ -562,16 +953,56 @@ return (
                         <EditorPermissionStatus />
                     </div>
                 </div>
-                {/* Terminal Panel (Desktop & Mobile) */}
-                <div className="w-80 flex-shrink-0 bg-[#171a29] border-l-2 border-zinc-800 overflow-y-auto flex flex-col rounded-3xl shadow-2xl transition-all duration-200 min-w-0 p-4">
-                    <h3 className="text-white mb-3 font-semibold">Terminal</h3>
+                {/* Resize Handle */}
+                {!terminalCollapsed && (
+                    <div 
+                        className="w-1 bg-slate-700/30 hover:bg-cyan-500/50 cursor-col-resize flex-shrink-0 transition-colors duration-200 relative group"
+                        onMouseDown={handleMouseDown}
+                    >
+                        <div className="absolute inset-0 w-2 -translate-x-0.5 group-hover:bg-cyan-500/20" />
+                    </div>
+                )}
+                
+                {/* Terminal Panel with Enhanced Styling */}
+                <div 
+                    className={`flex-shrink-0 bg-slate-900/95 border-l border-white/10 overflow-y-auto flex flex-col rounded-l-2xl shadow-2xl transition-all duration-300 min-w-0 custom-scrollbar relative ${
+                        terminalCollapsed ? 'w-12' : ''
+                    }`}
+                    style={!terminalCollapsed ? { width: `${terminalWidth}px` } : {}}
+                >
+                    {/* Always Visible Toggle Button */}
+                    <button 
+                        onClick={() => {
+                            setTerminalCollapsed(!terminalCollapsed);
+                            // Trigger terminal re-fit when reopening
+                            if (terminalCollapsed) {
+                                setTimeout(() => {
+                                    window.dispatchEvent(new Event('resize'));
+                                }, 300); // Wait for transition to complete
+                            }
+                        }}
+                        className="absolute top-3 right-3 w-8 h-8 rounded-md bg-slate-700/80 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-200 flex items-center justify-center active:scale-95 group z-50 shadow-lg border border-slate-600/50"
+                        title={terminalCollapsed ? "Expand terminal" : "Collapse terminal"}
+                    >
+                        <span className="text-sm font-bold transition-transform duration-200 group-hover:scale-110">{terminalCollapsed ? '▶' : '−'}</span>
+                    </button>
                     
-                    <TerminalPanel
-                        runCode={runCodeString}
-                        language={language}
-                        input={userInput}
-                        className="mt-2"
-                    />
+                    {/* Terminal Header with Enhanced Styling */}
+                    <div className={`flex items-center justify-between px-4 py-3 bg-slate-800/80 border-b border-white/10 rounded-tl-2xl transition-all duration-300 ${terminalCollapsed ? 'opacity-0' : 'opacity-100'}`}>
+                        <h3 className="text-slate-200 font-medium text-xs uppercase tracking-wider flex items-center gap-2">
+                            <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></span>
+                            Terminal
+                        </h3>
+                    </div>
+                    
+                    <div className={`flex-1 p-4 transition-all duration-300 ${terminalCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                        <TerminalPanel
+                            runCode={runCodeString}
+                            language={language}
+                            input={userInput}
+                            className="mt-2"
+                        />
+                    </div>
                 </div>
             </div>
         </div>

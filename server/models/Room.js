@@ -30,7 +30,7 @@ const roomSchema = new mongoose.Schema({
   settings: {
     canEdit: { 
       type: Boolean, 
-      default: true 
+      default: false  // Changed to false for security
     },
     defaultLanguage: { 
       type: String, 
@@ -40,6 +40,17 @@ const roomSchema = new mongoose.Schema({
       type: Number, 
       default: 10 
     }
+  },
+  // Individual user permissions - overrides room-wide setting
+  userPermissions: {
+    type: Map,
+    of: {
+      canEdit: { type: Boolean, default: false },
+      grantedBy: { type: String, default: '' }, // teacher's username for display
+      grantedAt: { type: Date, default: Date.now },
+      reason: { type: String, default: '' }
+    },
+    default: {}
   },
   currentCode: {
     language: { 
@@ -87,6 +98,69 @@ roomSchema.pre('save', function(next) {
   this.updatedAt = new Date();
   next();
 });
+
+// Method to get user's edit permission (considers both room-wide and individual)
+roomSchema.methods.getUserEditPermission = function(userId) {
+  // Teachers can always edit
+  const participant = this.participants.find(p => p.userId.toString() === userId.toString());
+  if (participant && participant.permissions === 'teacher') {
+    return true;
+  }
+  
+  // Check individual permission override
+  if (this.userPermissions.has(userId)) {
+    return this.userPermissions.get(userId).canEdit;
+  }
+  
+  // Fall back to room-wide setting
+  return this.settings.canEdit;
+};
+
+// Method to set individual user permission
+roomSchema.methods.setUserPermission = async function(userId, canEdit, grantedBy, reason = '') {
+  try {
+    if (!this.userPermissions.has(userId)) {
+      this.userPermissions.set(userId, {});
+    }
+    
+    const userPerm = this.userPermissions.get(userId);
+    userPerm.canEdit = canEdit;
+    userPerm.grantedBy = grantedBy;
+    userPerm.grantedAt = new Date();
+    userPerm.reason = reason;
+    
+    await this.save();
+    console.log(`[Room.setUserPermission] Set permission for userId=${userId}: canEdit=${canEdit}, grantedBy=${grantedBy}`);
+    return this;
+  } catch (error) {
+    console.error(`[Room.setUserPermission] Error setting permission for userId=${userId}:`, error);
+    throw error;
+  }
+};
+
+// Method to remove individual user permission (fall back to room-wide)
+roomSchema.methods.removeUserPermission = async function(userId) {
+  try {
+    if (this.userPermissions.has(userId)) {
+      this.userPermissions.delete(userId);
+      await this.save();
+      console.log(`[Room.removeUserPermission] Removed permission for userId=${userId}`);
+    }
+    return this;
+  } catch (error) {
+    console.error(`[Room.removeUserPermission] Error removing permission for userId=${userId}:`, error);
+    throw error;
+  }
+};
+
+// Method to get all user permissions for a room
+roomSchema.methods.getAllUserPermissions = function() {
+  const permissions = {};
+  this.userPermissions.forEach((value, key) => {
+    permissions[key] = value;
+  });
+  return permissions;
+};
 
 // Method to save code
 roomSchema.methods.saveCode = async function(content, language, userId) {

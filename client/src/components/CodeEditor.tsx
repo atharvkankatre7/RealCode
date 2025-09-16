@@ -57,6 +57,12 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
   const isRemoteUpdate = useRef(false)
   // Track timestamp of latest local keystroke to ignore stale echoes
   const lastLocalEditRef = useRef<number>(0)
+  // Track if room has been successfully joined to prevent premature room state sync
+  const hasJoinedRoom = useRef(false)
+  // Track if room state sync is in progress to prevent infinite loops
+  const isSyncingRoomState = useRef(false)
+  // Track last sync time to prevent too frequent syncs
+  const lastSyncTime = useRef(0)
 
   const storedUsername = typeof window !== 'undefined' ? localStorage.getItem("username") : null
   const [username, setUsername] = useState(storedUsername || initialUsername)
@@ -134,10 +140,12 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
   const [currentTeacherCursor, setCurrentTeacherCursor] = useState<{ lineNumber: number; column: number } | null>(null)
 
   useEffect(() => {
-    console.log('[DEBUG][CodeEditor] canEdit:', canEdit, 'isTeacher:', isTeacher);
+    console.log('[DEBUG][CodeEditor] canEdit changed to:', canEdit, 'isTeacher:', isTeacher, 'timestamp:', new Date().toISOString());
     if (!editorRef.current) return;
     const editor = editorRef.current;
     const shouldBeReadOnly = !canEdit && !isTeacher;
+    console.log('[DEBUG][CodeEditor] Setting editor options - shouldBeReadOnly:', shouldBeReadOnly);
+    
     editor.updateOptions({
       readOnly: shouldBeReadOnly,
       contextmenu: !shouldBeReadOnly,
@@ -151,7 +159,9 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
       cursorStyle: shouldBeReadOnly ? 'line-thin' : 'line',
       dragAndDrop: !shouldBeReadOnly
     });
+    
     console.log('[DEBUG][CodeEditor] Monaco readOnly set to:', shouldBeReadOnly, 'actual:', editor.getOption && editor.getOption(monaco.editor.EditorOption.readOnly));
+    
     const editorElement = editor.getDomNode();
     if (editorElement) {
       if (shouldBeReadOnly) {
@@ -159,11 +169,13 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
         editorElement.style.cursor = 'not-allowed';
         editorElement.title = '👁️ View-only mode';
         editorElement.classList.add('read-only-editor');
+        console.log('[DEBUG][CodeEditor] Applied read-only styling');
       } else {
         editorElement.style.opacity = '1';
         editorElement.style.cursor = 'text';
         editorElement.title = '✏️ Edit mode';
         editorElement.classList.remove('read-only-editor');
+        console.log('[DEBUG][CodeEditor] Applied edit mode styling');
       }
     }
   }, [canEdit, isTeacher, editorRef.current]);
@@ -204,6 +216,13 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
 
   const handleEditorChange = (value?: string) => {
     if (value === undefined || isRemoteUpdate.current) return;
+    
+    // Only send code changes if user has edit permission
+    if (!canEdit) {
+      console.log('[PERMISSION] User does not have edit permission, not sending code change');
+      return;
+    }
+    
     latestCodeRef.current = value;
     lastLocalEditRef.current = Date.now();
     // 🚫 do NOT call setCode here – avoids React re-render & cursor jump
@@ -228,6 +247,11 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
           setCode(code);
           latestCodeRef.current = code;
           
+          // Only send code change if user has edit permission
+          if (canEdit) {
+            throttledSendCode(code);
+          }
+          
           if (wasReadOnly) editorRef.current.updateOptions({ readOnly: true });
         } finally {
           isRemoteUpdate.current = false;
@@ -238,12 +262,20 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
       if (editorRef.current && canEdit) {
         const currentCode = editorRef.current.getValue();
         triggerManualSave(currentCode);
+      } else {
+        console.log('[PERMISSION] User does not have edit permission, cannot save code');
       }
     }
   }));
 
   const copyCode = () => {
      if (navigator.clipboard && latestCodeRef.current) {
+       // Only allow copying if user has edit permission or is teacher
+       if (!canEdit && !isTeacher) {
+         console.log('[PERMISSION] User does not have edit permission, cannot copy code');
+         return;
+       }
+       
        navigator.clipboard.writeText(latestCodeRef.current)
          .then(() => {
             // Can show a toast notification here
@@ -264,7 +296,11 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
        if (formattedCode !== raw) {
          editorRef.current.setValue(formattedCode);
          latestCodeRef.current = formattedCode;
-         throttledSendCode(formattedCode);
+         
+         // Only send formatted code if user has edit permission
+         if (canEdit) {
+           throttledSendCode(formattedCode);
+         }
        }
      } catch (error) {
        console.error('Error formatting code:', error);
@@ -520,8 +556,8 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
     roomId: string;
     timestamp: number;
   }) => {
-    const currentUserId = localStorage.getItem('userId');
-    if (data.userId === currentUserId) return;
+    // Remove self-filtering - allow all code changes to be processed
+    // This ensures code sync works properly for all users, including those with individual permissions
     const incomingFileId = data.fileId || 'main';
     if (incomingFileId !== fileId) return;
     if (data.code !== latestCodeRef.current && editorRef.current) {
@@ -548,10 +584,29 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
     }
   }, [fileId]);
 
-  // Room state synchronization on connection/reconnection
+  // Room state synchronization function - use ref to prevent infinite loops
+  const syncRoomStateRef = useRef<(() => Promise<void>) | null>(null);
+  
+  // Update the ref whenever dependencies change
   useEffect(() => {
-    const syncRoomState = async () => {
+    syncRoomStateRef.current = async () => {
+      // Prevent multiple simultaneous syncs to avoid infinite loops
+      if (isSyncingRoomState.current) {
+        console.log('⏸️ [ROOM_SYNC] Sync already in progress, skipping');
+        return;
+      }
+      
+      // Throttle syncs to prevent too frequent calls (minimum 2 seconds between syncs)
+      const now = Date.now();
+      if (now - lastSyncTime.current < 2000) {
+        console.log('⏸️ [ROOM_SYNC] Sync throttled, too soon since last sync');
+        return;
+      }
+      
       if (isConnected && socketReady && roomId) {
+        isSyncingRoomState.current = true;
+        lastSyncTime.current = now;
+        console.log('🔄 [ROOM_SYNC] Attempting to sync room state for room:', roomId);
         try {
           const state = await requestRoomState(roomId);
           if (state) {
@@ -603,19 +658,38 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
               onActiveUsersChange(usernames);
               // console.log('🔄 [ROOM_SYNC] User list synchronized');
             }
+          } else {
+            // Room not found - this is normal for new rooms, don't log as error
+            console.log('ℹ️ [ROOM_SYNC] Room not found yet - this is normal for new rooms');
           }
         } catch (error) {
-          // console.error('❌ [ROOM_SYNC] Failed to sync room state:', error);
+          console.error('❌ [ROOM_SYNC] Failed to sync room state:', error);
+        } finally {
+          // Always reset the sync flag
+          isSyncingRoomState.current = false;
         }
       }
     };
+  }, [isConnected, socketReady, roomId, requestRoomState, onActiveUsersChange]);
 
-    // Only sync on initial connection or when roomId/socket changes
-    if (isConnected && socketReady && roomId) {
-      syncRoomState();
+  // Room state synchronization on connection/reconnection
+  useEffect(() => {
+    // Only sync after room is successfully joined, not on initial mount
+    // This prevents the "Room not found" error when the room hasn't been created yet
+    if (isConnected && socketReady && roomId && hasJoinedRoom.current && syncRoomStateRef.current) {
+      // Add a small delay to prevent rapid successive calls
+      const timeoutId = setTimeout(() => {
+        if (syncRoomStateRef.current) {
+          syncRoomStateRef.current();
+        }
+      }, 1000); // 1 second delay
+      
+      return () => clearTimeout(timeoutId);
+    } else if (isConnected && socketReady && roomId && !hasJoinedRoom.current) {
+      console.log('⏸️ [ROOM_SYNC] Skipping room state sync - room not joined yet');
     }
     // eslint-disable-next-line
-  }, [isConnected, socketReady, roomId]);
+  }, [isConnected, socketReady, roomId, hasJoinedRoom.current]);
 
   
 
@@ -644,15 +718,15 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
   const handleGetInitialCode = useCallback((data: { requestingUserId: string; requestingUsername: string }) => {
     // console.log(`Received request for initial code from ${data.requestingUsername} (${data.requestingUserId})`);
 
-    // Only respond if we have code and we're connected
-    if (roomId && latestCodeRef.current && latestCodeRef.current.trim() !== "// Start coding...") {
+    // Only respond if we have code, we're connected, and we have edit permission
+    if (roomId && latestCodeRef.current && latestCodeRef.current.trim() !== "// Start coding..." && canEdit) {
       const socketServiceInstance = SocketService.getInstance();
       // console.log(`Sending initial code to ${data.requestingUsername}, length: ${latestCodeRef.current.length}`);
       socketServiceInstance.sendInitialCode(roomId, latestCodeRef.current, data.requestingUserId);
     } else {
-      // console.log(`Not sending initial code - no meaningful code to share or not in room`);
+      // console.log(`Not sending initial code - no meaningful code to share, not in room, or no edit permission`);
     }
-  }, [roomId]);
+  }, [roomId, canEdit]);
 
   // Handle receiving initial code as a new user (always apply for sync)
   const handleInitialCodeReceived = useCallback((data: { code: string }) => {
@@ -1374,6 +1448,9 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
             if (users && Array.isArray(users)) {
               handleUserListUpdate(users);
             }
+            
+            // Mark that room has been successfully joined
+            hasJoinedRoom.current = true;
           }
         } catch (error) {
           // console.error("Error joining room:", error);
@@ -1448,19 +1525,26 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
 
   const triggerAutoSave = (code: string) => {
     if (!socket || !user?.email) return;
+    
+    // Only auto-save if user has edit permission
+    if (!canEdit) {
+      console.log('[PERMISSION] User does not have edit permission, not auto-saving');
+      return;
+    }
 
     setSaveStatus('saving');
-    socket.emit('code-change', {
-      roomId,
-      code,
-      userId: user.email,
-      username,
-      timestamp: Date.now()
-    });
+    // Use the proper socketService method instead of direct socket emission
+    socketService.sendCodeChange(roomId, fileId, code);
   };
 
   const triggerManualSave = (code: string) => {
     if (!socket || !currentUserId) return;
+    
+    // Only manual save if user has edit permission
+    if (!canEdit) {
+      console.log('[PERMISSION] User does not have edit permission, not manually saving');
+      return;
+    }
 
     setSaveStatus('saving');
     socket.emit('manual-save', {
@@ -1513,7 +1597,9 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
         onMount={handleEditorDidMount}
         onChange={handleEditorChange}
         options={{
-          fontSize: 16,
+          fontSize: 14,
+          fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', 'monospace'",
+          lineHeight: 22,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
           wordWrap: "on",
@@ -1521,6 +1607,10 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
           smoothScrolling: true,
           cursorBlinking: "blink",
           contextmenu: canEdit || isTeacher,
+          lineNumbers: "on",
+          lineNumbersMinChars: 3,
+          padding: { top: 16, bottom: 16 },
+          renderLineHighlight: "all",
           ...(options || {}) // Merge in options from props
         }}
       />

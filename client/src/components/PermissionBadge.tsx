@@ -213,9 +213,15 @@ export function EditorPermissionStatus() {
       initial={{ y: 50, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className={`flex items-center justify-center p-2 text-sm font-medium ${status.bgColor} ${status.textColor}`}
+      className={`flex items-center justify-center gap-2 py-2 px-4 text-sm font-medium rounded-lg shadow-sm transition-all duration-200 ${
+        isTeacher 
+          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' 
+          : canEdit 
+            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+            : 'bg-slate-500/20 text-slate-300 border border-slate-500/30'
+      }`}
     >
-      <IconComponent className="w-4 h-4 mr-2" />
+      <IconComponent className="w-4 h-4" />
       <span>{status.label}</span>
     </motion.div>
   );

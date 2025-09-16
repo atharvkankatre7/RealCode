@@ -103,8 +103,12 @@ class SocketService {
         timeout: 10000,
         autoConnect: true,
         forceNew: true,
-        upgrade: true // Allow upgrading to websocket after initial connection
-      });
+        upgrade: true, // Allow upgrading to websocket after initial connection
+        // Better reconnection settings
+        reconnection: true,
+        maxReconnectionAttempts: 10,
+        reconnectionDelayMax: 5000
+      } as any); // Type assertion to allow custom Socket.IO options
 
       this.setupSocketEventHandlers();
     } else if (!this.socket.connected) {
@@ -130,6 +134,14 @@ class SocketService {
   disconnect(): void {
     if (this.socket) {
       try {
+        // Clean up keepalive interval if it exists
+        if ((this.socket as any).keepaliveInterval) {
+          clearInterval((this.socket as any).keepaliveInterval);
+        }
+        // Clean up health check interval if it exists
+        if ((this.socket as any).healthCheckInterval) {
+          clearInterval((this.socket as any).healthCheckInterval);
+        }
         this.socket.disconnect();
       } catch (error) {
         console.error('Error disconnecting socket:', error);
@@ -137,6 +149,40 @@ class SocketService {
       this.socket = null;
       this._isConnected = false;
     }
+  }
+
+  // Keepalive mechanism to prevent connection timeouts
+  private startKeepalive(): void {
+    if (!this.socket) return;
+    
+    const keepaliveInterval = setInterval(() => {
+      if (this.socket && this.socket.connected) {
+        // Send a ping event to keep the connection alive
+        this.socket.emit('ping');
+        console.log('💓 [KEEPALIVE] Sent ping to server');
+      } else {
+        clearInterval(keepaliveInterval);
+      }
+    }, 25000); // Send ping every 25 seconds (before server's 30-second timeout)
+    
+    // Store the interval ID for cleanup
+    (this.socket as any).keepaliveInterval = keepaliveInterval;
+  }
+
+  // Check connection health and reconnect if needed
+  private checkConnectionHealth(): void {
+    if (!this.socket) return;
+    
+    const healthCheckInterval = setInterval(() => {
+      if (this.socket && !this.socket.connected) {
+        console.log('⚠️ [HEALTH] Socket disconnected, attempting to reconnect...');
+        clearInterval(healthCheckInterval);
+        this.connect();
+      }
+    }, 5000); // Check every 5 seconds
+    
+    // Store the interval ID for cleanup
+    (this.socket as any).healthCheckInterval = healthCheckInterval;
   }
 
   private setupSocketEventHandlers(): void {
@@ -170,6 +216,19 @@ class SocketService {
     this.socket.on('error', (error) => {
       console.error('❌ Socket error:', error);
       this.emitEvent('error', error);
+    });
+
+    // Add keepalive mechanism to prevent timeouts
+    this.socket.on('connect', () => {
+      // Start keepalive ping every 25 seconds (before server's 30-second timeout)
+      this.startKeepalive();
+      // Start connection health monitoring
+      this.checkConnectionHealth();
+    });
+
+    // Handle pong response from server
+    this.socket.on('pong', () => {
+      console.log('💓 [KEEPALIVE] Received pong from server');
     });
 
     // Set up all the socket event listeners for real-time features

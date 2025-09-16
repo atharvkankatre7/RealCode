@@ -39,50 +39,32 @@ function logRoomsState() {
 function emitRoomUsersUpdated(io, roomId) {
   const room = rooms[roomId];
   if (!room) {
-    console.warn(`⚠️ [EMIT_USERS] Room ${roomId} not found`);
+    console.error(`❌ [EMIT] Room ${roomId} not found for emitRoomUsersUpdated`);
     return;
   }
 
-  const users = room.users.map((user) => ({
-    username: user.username,
-    role: user.role,
+  // Update student list before emitting
+  updateStudentList(roomId);
+  
+  const userList = room.users.map(user => ({
     socketId: user.socketId,
+    username: user.username,
     userId: user.userId,
-    canEdit: user.role === 'teacher' || room.roomPermission, // Teachers always can edit, students based on room permission
-    lastSeen: user.lastSeen || new Date().toISOString()
+    role: user.role,
+    canEdit: getEditPermission(roomId, user.socketId)
   }));
 
-  // Throttle: allow at most one emit every 500 ms per room
-  const now = Date.now();
-  if (!emitRoomUsersUpdated.lastEmit) emitRoomUsersUpdated.lastEmit = {};
-  if (emitRoomUsersUpdated.lastEmit[roomId] && now - emitRoomUsersUpdated.lastEmit[roomId] < 500) {
-    return; // Skip to avoid flooding
-  }
-  emitRoomUsersUpdated.lastEmit[roomId] = now;
-
-  console.log(`📤 [EMIT_USERS] Broadcasting user list to room ${roomId}: ${users.length} users`);
-
-  // Emit to ALL users in the room
-  io.to(roomId).emit("room-users-updated", {
-    users,
-    count: users.length,
-    roomId,
-    timestamp: new Date().toISOString(),
-    event: 'users-updated'
+  console.log(`📢 [EMIT] Emitting room-users-updated for room ${roomId}:`, {
+    totalUsers: userList.length,
+    users: userList.map(u => ({ username: u.username, userId: u.userId, role: u.role, canEdit: u.canEdit })),
+    roomUsersCount: room.users.length,
+    roomUsers: room.users.map(u => ({ username: u.username, userId: u.userId, role: u.role }))
   });
 
-  // Also emit update-user-list for comprehensive coverage
-  io.to(roomId).emit("update-user-list", {
-    users,
-    timestamp: new Date().toISOString(),
-    triggeredBy: 'room-users-updated',
-    roomId
-  });
-
-  console.log(`✅ [EMIT_USERS] Successfully broadcasted user list to ${users.length} users in room ${roomId}`);
+  io.to(roomId).emit('room-users-updated', { users: userList });
 }
 
-// RBAC: Simple room-wide permission management
+// RBAC: Enhanced permission management with individual user overrides
 function toggleRoomPermission(roomId) {
   console.log(`📝 [ROOM_PERMISSION] Toggling room permission for room ${roomId}`);
 
@@ -91,6 +73,11 @@ function toggleRoomPermission(roomId) {
     const error = `Room ${roomId} not found`;
     console.error(`❌ [ROOM_PERMISSION] ${error}`);
     return { success: false, error };
+  }
+
+  // Initialize roomPermission if it doesn't exist
+  if (room.roomPermission === undefined) {
+    room.roomPermission = false;
   }
 
   // Toggle room permission (default is false - students can't edit)
@@ -115,23 +102,40 @@ function getRoomPermission(roomId) {
   return room.roomPermission || false;
 }
 
-// RBAC: Get edit permission for a user based on role and room permission
+// RBAC: Get edit permission for a user based on role, room permission, and individual overrides
 function getEditPermission(roomId, socketId) {
   const room = rooms[roomId];
   if (!room) return false;
 
-  // Find the user
-  const user = room.users.find(u => u.socketId === socketId);
+  // Find the user by socketId first
+  let user = room.users.find(u => u.socketId === socketId);
+
+  // Note: We avoid referencing a global io here. Reconnection scenarios are handled
+  // elsewhere where socketId is refreshed (e.g., join-room). If no user is found by
+  // socketId, deny edit permission for safety.
+  
   if (!user) return false;
 
-  // Teachers can always edit, students based on room permission
-  return user.role === 'teacher' || room.roomPermission;
+  // Teachers can always edit
+  if (user.role === 'teacher') return true;
+
+  // Check individual permission override first
+  if (room.userPermissions && room.userPermissions.has(String(user.userId))) {
+    const individualPermission = room.userPermissions.get(String(user.userId));
+    console.log(`🔍 [PERMISSION] User ${user.username} (${user.userId}) has individual permission: ${individualPermission.canEdit}`);
+    return individualPermission.canEdit;
+  }
+
+  // Fall back to room-wide setting
+  const roomPermission = room.roomPermission || false;
+  console.log(`🔍 [PERMISSION] User ${user.username} (${user.userId}) using room permission: ${roomPermission}`);
+  return roomPermission;
 }
 
 // RBAC: No need to remove individual permissions on disconnect
 // Room permission persists regardless of user connections
 
-// Update student list with permission info
+// Update student list with permission info (including individual overrides)
 function updateStudentList(roomId) {
   const room = rooms[roomId];
   if (!room) return;
@@ -141,18 +145,46 @@ function updateStudentList(roomId) {
 
   room.studentList = room.users
     .filter(user => user.role === 'student')
-    .map(user => ({
-      socketId: user.socketId,
-      username: user.username,
-      userId: user.userId,
-      email: user.email || null,
-      canEdit: room.roomPermission, // RBAC: All students have same permission
-      joinedAt: user.joinedAt || new Date().toISOString(),
-      lastActivity: user.lastActivity || new Date().toISOString()
-    }));
+    .map(user => {
+      // Check individual permission override first
+      let canEdit = room.roomPermission || false; // Default to room-wide setting
+      let hasIndiv = false;
+      let indivPerm = null;
+      if (room.userPermissions && room.userPermissions.has(String(user.userId))) {
+        indivPerm = room.userPermissions.get(String(user.userId));
+        canEdit = indivPerm.canEdit;
+        hasIndiv = true;
+      }
+      console.log('[DEBUG][STUDENT-LIST] For user', user.userId, 'hasIndiv:', hasIndiv, 'indivPerm:', indivPerm);
+      // Handle grantedBy field - convert user ID to username if needed
+      let permissionGrantedBy = null;
+      if (hasIndiv && indivPerm.grantedBy) {
+        // Check if grantedBy is a user ID (contains 'user_' prefix) or already a username
+        if (indivPerm.grantedBy.startsWith('user_')) {
+          // This is a user ID, try to find the corresponding username
+          const grantedByUser = room.users.find(u => u.userId === indivPerm.grantedBy);
+          permissionGrantedBy = grantedByUser ? grantedByUser.username : indivPerm.grantedBy;
+          console.log(`[DEBUG][PERMISSION] Converted grantedBy from user ID '${indivPerm.grantedBy}' to username '${permissionGrantedBy}'`);
+        } else {
+          // This is already a username
+          permissionGrantedBy = indivPerm.grantedBy;
+          console.log(`[DEBUG][PERMISSION] Using existing username '${permissionGrantedBy}' for grantedBy`);
+        }
+      }
 
-  // DEBUG: Log the resulting studentList
-  console.log(`[DEBUG] updateStudentList: studentList for room ${roomId}:`, JSON.stringify(room.studentList, null, 2));
+      return {
+        socketId: user.socketId,
+        username: user.username,
+        userId: user.userId,
+        email: user.email || null,
+        canEdit: canEdit,
+        hasIndividualPermission: hasIndiv,
+        permissionGrantedBy: permissionGrantedBy,
+        joinedAt: user.joinedAt || new Date().toISOString(),
+        lastActivity: user.lastActivity || new Date().toISOString()
+      };
+    });
+  console.log('[DEBUG][STUDENT-LIST] Final studentList:', JSON.stringify(room.studentList, null, 2));
 
   console.log(`Updated student list for room ${roomId}:`, room.studentList.length, 'students');
 }
@@ -217,6 +249,10 @@ function getRoomState(roomId) {
 
 // Throttle map to prevent spamming room-state broadcasts
 const lastBroadcastTimes = {};
+// Throttle map to prevent spamming room state requests
+let lastRoomStateRequestTimes = {};
+// Global rate limiting for room state requests per room
+let roomStateRequestCounts = {};
 
 // Broadcast room state to all users (throttled to once every 500 ms per room)
 function broadcastRoomState(io, roomId, eventType = 'room-state-update') {
@@ -364,6 +400,13 @@ export const registerRoomHandlers = (io, socket) => {
 
       // Determine role based on whether this user is the teacher
       const isTeacher = room.teacherId === validUserId;
+      
+      console.log(`🔍 [JOIN] Role determination for ${validUsername} (${validUserId}):`, {
+        roomTeacherId: room.teacherId,
+        validUserId,
+        isTeacher,
+        existingUserIndex
+      });
 
       if (existingUserIndex === -1) {
         // New user joining - assign role based on teacher ID
@@ -374,14 +417,16 @@ export const registerRoomHandlers = (io, socket) => {
           userId: validUserId,
           role: userRole,
         });
-        console.log(`New user ${validUsername} (${validUserId}) joined as ${userRole} in room ${roomId}`);
+        console.log(`✅ [JOIN] New user ${validUsername} (${validUserId}) joined as ${userRole} in room ${roomId}`);
       } else {
         // Existing user reconnecting - assign role based on teacher ID (not stored role)
         userRole = isTeacher ? "teacher" : "student";
         room.users[existingUserIndex].socketId = socket.id;
         room.users[existingUserIndex].role = userRole; // Update role to ensure consistency
-        console.log(`Existing user ${validUsername} (${validUserId}) reconnected as ${userRole} in room ${roomId}`);
+        console.log(`🔄 [JOIN] Existing user ${validUsername} (${validUserId}) reconnected as ${userRole} in room ${roomId}`);
       }
+
+      console.log(`📊 [JOIN] Room ${roomId} users after join:`, room.users.map(u => ({ username: u.username, userId: u.userId, role: u.role, socketId: u.socketId })));
 
       socket.username = validUsername;
       socket.userId = validUserId;
@@ -429,6 +474,13 @@ export const registerRoomHandlers = (io, socket) => {
       socket.emit('edit-permission', { canEdit });
       console.log(`Sent initial edit permission to ${validUsername}: ${canEdit}`);
 
+      // Update student list and send to teachers
+      updateStudentList(roomId);
+      const studentList = getStudentList(roomId);
+      room.users.filter(u => u.role === 'teacher').forEach(t => {
+        io.to(t.socketId).emit('update-student-list', { students: studentList });
+      });
+
       // NEW: Always broadcast full room state after join
       broadcastRoomState(io, roomId, isNewUser ? 'user-joined' : 'user-reconnected');
     } catch (error) {
@@ -436,6 +488,35 @@ export const registerRoomHandlers = (io, socket) => {
       callback({ error: `Failed to join room: ${error.message}` });
     }
   })
+
+  // Handle student list requests
+  socket.on("request-student-list", ({ roomId }) => {
+    console.log(`📥 [STUDENT_LIST] Student list requested for room ${roomId} by ${socket.username || socket.id}`);
+    
+    try {
+      const room = rooms[roomId];
+      if (!room) {
+        console.warn(`⚠️ [STUDENT_LIST] Room ${roomId} not found`);
+        return;
+      }
+      
+      console.log(`🔍 [STUDENT_LIST] Room ${roomId} found with ${room.users.length} users:`, room.users.map(u => ({ username: u.username, userId: u.userId, role: u.role })));
+      
+      // Update student list and send to the requesting user
+      updateStudentList(roomId);
+      const studentList = getStudentList(roomId);
+      
+      console.log(`📤 [STUDENT_LIST] Sending student list to ${socket.username || socket.id}:`, studentList);
+      console.log(`📊 [STUDENT_LIST] Student list details:`, {
+        totalStudents: studentList.length,
+        students: studentList.map(s => ({ username: s.username, userId: s.userId, canEdit: s.canEdit, hasIndividualPermission: s.hasIndividualPermission }))
+      });
+      
+      socket.emit('update-student-list', { students: studentList });
+    } catch (error) {
+      console.error(`❌ [STUDENT_LIST] Error handling request-student-list:`, error);
+    }
+  });
 
   // RBAC: Handle room permission toggle (teacher only)
   socket.on("toggle-room-permission", ({ roomId }, callback) => {
@@ -459,22 +540,50 @@ export const registerRoomHandlers = (io, socket) => {
 
       // Validate teacher authorization
       let teacher = room.users.find(u => u.socketId === socket.id);
+      
+      console.log(`🔍 [RBAC] Looking for teacher by socketId ${socket.id}:`, teacher);
+      
+      // If not found by socketId, try to find by userId (for reconnection scenarios)
       if (!teacher && socket.userId) {
         teacher = room.users.find(u => u.userId === socket.userId);
+        console.log(`🔍 [RBAC] Looking for teacher by userId ${socket.userId}:`, teacher);
+        if (teacher) {
+          // Update the socketId to match current connection
+          teacher.socketId = socket.id;
+          console.log(`🔧 [RBAC] Updated socketId for teacher ${teacher.username} (${teacher.userId})`);
+        }
       }
-
-      if (!teacher || teacher.role !== 'teacher') {
-        const error = `Only teachers can toggle room permissions. User: ${teacher?.username || 'unknown'}, Role: ${teacher?.role || 'unknown'}`;
-        console.error(`❌ [RBAC_SECURITY] Unauthorized toggle attempt:`, {
+      
+      // Additional fallback: check if the user is the teacher based on room.teacherId
+      if (!teacher && socket.userId && room.teacherId === socket.userId) {
+        console.log(`🔍 [RBAC] User ${socket.userId} is teacher based on room.teacherId ${room.teacherId}`);
+        // This user is the teacher but not in the users array - add them
+        teacher = {
           socketId: socket.id,
-          username: teacher?.username,
-          role: teacher?.role,
-          roomId,
-          timestamp: new Date().toISOString()
-        });
-        if (callback) callback({ success: false, error });
+          username: socket.username || 'Unknown',
+          userId: socket.userId,
+          role: 'teacher'
+        };
+        room.users.push(teacher);
+        console.log(`🔧 [RBAC] Added missing teacher user: ${teacher.username} (${teacher.userId})`);
+      }
+      
+      if (!teacher) {
+        const error = `User not found in room. SocketId: ${socket.id}, UserId: ${socket.userId}`;
+        console.error(`❌ [RBAC] ${error}`);
+        console.error(`❌ [RBAC] Room users:`, room.users.map(u => ({ socketId: u.socketId, userId: u.userId, username: u.username, role: u.role })));
+        if (callback) callback({ success: false, error: "User not found in room" });
         return;
       }
+      
+      if (teacher.role !== 'teacher') {
+        const error = `User ${teacher.username} (${teacher.userId}) is not a teacher. Role: ${teacher.role}`;
+        console.error(`❌ [RBAC] ${error}`);
+        if (callback) callback({ success: false, error: "Only teachers can toggle room permissions" });
+        return;
+      }
+      
+      console.log(`✅ [RBAC] Teacher validation passed: ${teacher.username} (${teacher.userId})`);
 
       // Toggle room permission
       const result = toggleRoomPermission(roomId);
@@ -563,7 +672,39 @@ export const registerRoomHandlers = (io, socket) => {
       console.log("[SOCKET] Missing roomId or code.", { roomId, code });
       return;
     }
+    
     try {
+      // Ensure socket/user mapping is up to date for permission checks
+      const socketRoom = getRoom(roomId);
+      if (socketRoom) {
+        let mappedUser = socketRoom.users.find(u => u.socketId === socket.id);
+        if (!mappedUser && socket.userId) {
+          const byUserId = socketRoom.users.find(u => u.userId === socket.userId);
+          if (byUserId) {
+            byUserId.socketId = socket.id;
+            mappedUser = byUserId;
+            console.log(`🔧 [SYNC] Reconciled socketId for user ${byUserId.username} (${byUserId.userId}) before code-change`);
+          }
+        }
+      }
+
+      // 🔒 CRITICAL: Check if user has permission to edit code
+      const canEdit = getEditPermission(roomId, socket.id);
+      console.log(`🔒 [PERMISSION_CHECK] User ${username} (${userId}) requesting code change. Can edit: ${canEdit}`);
+      
+      if (!canEdit) {
+        console.log(`❌ [PERMISSION_DENIED] User ${username} (${userId}) attempted to edit code without permission`);
+        // Send permission denied event to the user
+        socket.emit("permission-denied", {
+          message: "You don't have permission to edit code in this room",
+          action: "code-change",
+          timestamp: Date.now()
+        });
+        return;
+      }
+      
+      console.log(`✅ [PERMISSION_GRANTED] User ${username} (${userId}) has permission to edit code`);
+      
       // Attempt to update the DB and log the query and update
       console.log("[SOCKET] Attempting DB update:", {
         query: { roomId },
@@ -575,12 +716,12 @@ export const registerRoomHandlers = (io, socket) => {
       });
       
       // First, try to find the room to see if it exists
-      let room = await Room.findOne({ roomId });
+      let dbRoom = await Room.findOne({ roomId });
       
-      if (!room) {
+      if (!dbRoom) {
         // Room doesn't exist, create it
         console.log("[SOCKET] Room not found, creating new room:", roomId);
-        room = new Room({
+        dbRoom = new Room({
           roomId,
           createdBy: userId || 'unknown',
           currentCode: {
@@ -590,7 +731,7 @@ export const registerRoomHandlers = (io, socket) => {
             lastSavedBy: userId || 'unknown'
           }
         });
-        await room.save();
+        await dbRoom.save();
         console.log("[SOCKET] New room created successfully:", roomId);
       } else {
         // Room exists, update it
@@ -653,6 +794,22 @@ export const registerRoomHandlers = (io, socket) => {
     }
     
     try {
+      // 🔒 CRITICAL: Check if user has permission to save code
+      const canEdit = getEditPermission(roomId, socket.id);
+      console.log(`🔒 [PERMISSION_CHECK] User ${userId} requesting manual save. Can edit: ${canEdit}`);
+      
+      if (!canEdit) {
+        console.log(`❌ [PERMISSION_DENIED] User ${userId} attempted to save code without permission`);
+        // Send permission denied event to the user
+        socket.emit("permission-denied", {
+          message: "You don't have permission to save code in this room",
+          action: "manual-save",
+          timestamp: Date.now()
+        });
+        return;
+      }
+      
+      console.log(`✅ [PERMISSION_GRANTED] User ${userId} has permission to save code`);
       console.log(`💾 Manual save requested for room ${roomId} by user ${userId}`);
       
       const result = await autoSaveService.manualSave(roomId, code, language, userId);
@@ -903,44 +1060,25 @@ export const registerRoomHandlers = (io, socket) => {
 
       console.log(`📥 [REQUEST_STUDENTS] Teacher ${user.username} requesting student list for room ${roomId}`);
 
-      // Clean up any disconnected users before sending the list
-      const connectedSockets = Array.from(io.sockets.sockets.keys());
-      const originalUserCount = room.users.length;
-
-      room.users = room.users.filter(u => {
-        const isConnected = connectedSockets.includes(u.socketId);
-        if (!isConnected) {
-          console.log(`🧹 [REQUEST_STUDENTS] Removing disconnected user: ${u.username} (${u.socketId})`);
-        }
-        return isConnected;
-      });
-
-      const cleanedUserCount = room.users.length;
-      if (originalUserCount !== cleanedUserCount) {
-        console.log(`🧹 [REQUEST_STUDENTS] Cleaned up ${originalUserCount - cleanedUserCount} disconnected users`);
-      }
-
+      // Don't modify room.users directly - just get the current student list
+      // The cleanup should be handled by the main user management logic, not here
+      
       // Send current student list to the requesting teacher
       const studentList = getStudentList(roomId);
+      
+      console.log(`📤 [REQUEST_STUDENTS] Sending student list to teacher ${user.username}:`, {
+        studentListLength: studentList.length,
+        studentList: studentList.map(s => ({ username: s.username, userId: s.userId, canEdit: s.canEdit, hasIndividualPermission: s.hasIndividualPermission })),
+        roomUsersCount: room.users.length,
+        roomUsers: room.users.map(u => ({ username: u.username, userId: u.userId, role: u.role }))
+      });
+      
       socket.emit('update-student-list', { students: studentList });
 
-      // Also send updated user list to all users in room
-      const allUsers = room.users.map(u => ({
-        socketId: u.socketId,
-        username: u.username,
-        userId: u.userId,
-        role: u.role,
-        canEdit: getEditPermission(roomId, u.socketId),
-        lastUpdated: new Date().toISOString()
-      }));
-
-      io.to(roomId).emit('update-user-list', {
-        users: allUsers,
-        timestamp: new Date().toISOString(),
-        triggeredBy: 'student-list-request'
-      });
-
-      console.log(`✅ [REQUEST_STUDENTS] Sent student list to teacher ${user.username}: ${studentList.length} students, ${allUsers.length} total users`);
+      // Don't send update-user-list here - it conflicts with room-users-updated
+      // The room-users-updated event already handles user list updates
+      
+      console.log(`✅ [REQUEST_STUDENTS] Sent student list to teacher ${user.username}: ${studentList.length} students`);
     } catch (error) {
       console.error(`💥 [REQUEST_STUDENTS] Error handling request-student-list for room ${roomId}:`, error);
     }
@@ -1047,7 +1185,291 @@ export const registerRoomHandlers = (io, socket) => {
     } catch (error) {
       console.error(`Error handling typing notification:`, error);
     }
-  })
+  });
+
+  // Handle individual user permission changes
+  socket.on("set-user-permission", ({ roomId, targetUserId, canEdit, reason }, callback) => {
+    if (!roomId || !targetUserId) {
+      const error = `Invalid set-user-permission payload: ${JSON.stringify({ roomId, targetUserId, canEdit })}`;
+      console.error(`❌ [USER_PERMISSION] ${error}`);
+      if (callback) callback({ success: false, error });
+      return;
+    }
+
+    console.log(`🔍 [USER_PERMISSION] Processing set-user-permission:`, {
+      roomId,
+      targetUserId,
+      canEdit,
+      reason,
+      socketId: socket.id,
+      socketUserId: socket.userId,
+      socketUsername: socket.username,
+      socketRole: socket.role
+    });
+
+    try {
+      const room = rooms[roomId];
+      if (!room) {
+        const error = "Room not found";
+        console.error(`❌ [USER_PERMISSION] ${error}`);
+        if (callback) callback({ success: false, error });
+        return;
+      }
+
+      console.log(`📊 [USER_PERMISSION] Room ${roomId} found. Current users:`, room.users.map(u => ({
+        socketId: u.socketId,
+        userId: u.userId,
+        username: u.username,
+        role: u.role
+      })));
+
+      // Verify the requester is a teacher
+      let requester = room.users.find(u => u.socketId === socket.id);
+      
+      console.log(`🔍 [USER_PERMISSION] Looking for requester by socketId ${socket.id}:`, requester);
+      
+      // If not found by socketId, try to find by userId (for reconnection scenarios)
+      if (!requester && socket.userId) {
+        requester = room.users.find(u => u.userId === socket.userId);
+        console.log(`🔍 [USER_PERMISSION] Looking for requester by userId ${socket.userId}:`, requester);
+        if (requester) {
+          // Update the socketId to match current connection
+          requester.socketId = socket.id;
+          console.log(`🔧 [USER_PERMISSION] Updated socketId for user ${requester.username} (${requester.userId})`);
+        }
+      }
+      
+      // Additional fallback: check if the user is the teacher based on room.teacherId
+      if (!requester && socket.userId && room.teacherId === socket.userId) {
+        console.log(`🔍 [USER_PERMISSION] User ${socket.userId} is teacher based on room.teacherId ${room.teacherId}`);
+        // This user is the teacher but not in the users array - add them
+        requester = {
+          socketId: socket.id,
+          username: socket.username || 'Unknown',
+          userId: socket.userId,
+          role: 'teacher'
+        };
+        room.users.push(requester);
+        console.log(`🔧 [USER_PERMISSION] Added missing teacher user: ${requester.username} (${requester.userId})`);
+      }
+      
+      if (!requester) {
+        const error = `User not found in room. SocketId: ${socket.id}, UserId: ${socket.userId}`;
+        console.error(`❌ [USER_PERMISSION] ${error}`);
+        console.error(`❌ [USER_PERMISSION] Room users:`, room.users.map(u => ({ socketId: u.socketId, userId: u.userId, username: u.username, role: u.role })));
+        if (callback) callback({ success: false, error: "User not found in room" });
+        return;
+      }
+      
+      if (requester.role !== 'teacher') {
+        const error = `User ${requester.username} (${requester.userId}) is not a teacher. Role: ${requester.role}`;
+        console.error(`❌ [USER_PERMISSION] ${error}`);
+        if (callback) callback({ success: false, error: "Only teachers can change user permissions" });
+        return;
+      }
+      
+      console.log(`✅ [USER_PERMISSION] Teacher validation passed: ${requester.username} (${requester.userId})`);
+
+      // Set the individual user permission
+      try {
+        // Update the in-memory room object
+        if (!room.userPermissions) {
+          room.userPermissions = new Map();
+        }
+        
+        console.log('[DEBUG][SET-PERM] userPermissions map BEFORE:', Array.from(room.userPermissions.entries()));
+        room.userPermissions.set(String(targetUserId), {
+          canEdit: canEdit,
+          grantedBy: requester.username, // Store username instead of userId for display
+          grantedAt: new Date(),
+          reason: reason || ''
+        });
+        console.log('[DEBUG][SET-PERM] userPermissions map AFTER:', Array.from(room.userPermissions.entries()));
+        
+        console.log(`✅ [USER_PERMISSION] Set permission for user ${targetUserId}: canEdit=${canEdit}`);
+        
+        // Update student list and broadcast to all users
+        updateStudentList(roomId);
+        emitRoomUsersUpdated(io, roomId);
+        
+        // Send updated student list to ALL users in the room (not just teachers)
+        // This ensures students can see their permission changes immediately
+        const studentList = getStudentList(roomId);
+        console.log(`📤 [USER_PERMISSION] Sending updated student list to ALL users in room:`, studentList);
+        room.users.forEach(user => {
+          io.to(user.socketId).emit('update-student-list', { students: studentList });
+          console.log(`📤 [USER_PERMISSION] Sent student list to user ${user.username} (${user.socketId}): ${studentList.length} students`);
+        });
+        
+        // Send updated user list to all users (but don't send update-user-list to avoid conflicts)
+        // The room-users-updated event already handles this
+        
+        console.log(`✅ [USER_PERMISSION] Set permission for user ${targetUserId}: canEdit=${canEdit}`);
+        
+        // Notify the target user specifically
+        const targetUser = room.users.find(u => u.userId === targetUserId);
+        if (targetUser) {
+          io.to(targetUser.socketId).emit("user-permission-changed", {
+            canEdit,
+            grantedBy: requester.username,
+            reason: reason || ''
+          });
+        }
+        
+        // Send acknowledgment callback to the teacher
+        if (callback) {
+          callback({
+            success: true,
+            targetUserId,
+            canEdit,
+            reason: reason || ''
+          });
+        }
+        
+        // Also emit the event for consistency
+        socket.emit("user-permission-set", {
+          success: true,
+          targetUserId,
+          canEdit,
+          reason: reason || ''
+        });
+      } catch (error) {
+        console.error(`❌ [USER_PERMISSION] Error setting permission:`, error);
+        const errorMsg = error.message || 'Unknown error';
+        if (callback) callback({ success: false, error: errorMsg });
+        socket.emit("user-permission-error", { error: errorMsg });
+      }
+    } catch (error) {
+      console.error(`❌ [USER_PERMISSION] Error handling set-user-permission:`, error);
+      const errorMsg = "Server error";
+      if (callback) callback({ success: false, error: errorMsg });
+      socket.emit("user-permission-error", { error: errorMsg });
+    }
+  });
+
+  // Handle removing individual user permission (fall back to room-wide)
+  socket.on("remove-user-permission", ({ roomId, targetUserId }, callback) => {
+    if (!roomId || !targetUserId) {
+      const error = `Invalid remove-user-permission payload: ${JSON.stringify({ roomId, targetUserId })}`;
+      console.error(`❌ [USER_PERMISSION] ${error}`);
+      if (callback) callback({ success: false, error });
+      return;
+    }
+
+    try {
+      const room = rooms[roomId];
+      if (!room) {
+        const error = "Room not found";
+        console.error(`❌ [USER_PERMISSION] ${error}`);
+        if (callback) callback({ success: false, error });
+        return;
+      }
+
+      // Verify the requester is a teacher
+      let requester = room.users.find(u => u.socketId === socket.id);
+      
+      // If not found by socketId, try to find by userId (for reconnection scenarios)
+      if (!requester && socket.userId) {
+        requester = room.users.find(u => u.userId === socket.userId);
+        if (requester) {
+          // Update the socketId to match current connection
+          requester.socketId = socket.id;
+          console.log(`🔧 [USER_PERMISSION] Updated socketId for user ${requester.username} (${requester.userId})`);
+        }
+      }
+      
+      // Additional fallback: check if the user is the teacher based on room.teacherId
+      if (!requester && socket.userId && room.teacherId === socket.userId) {
+        // This user is the teacher but not in the users array - add them
+        requester = {
+          socketId: socket.id,
+          username: socket.username || 'Unknown',
+          userId: socket.userId,
+          role: 'teacher'
+        };
+        room.users.push(requester);
+        console.log(`🔧 [USER_PERMISSION] Added missing teacher user: ${requester.username} (${requester.userId})`);
+      }
+      
+      if (!requester) {
+        const error = `User not found in room. SocketId: ${socket.id}, UserId: ${socket.userId}`;
+        console.error(`❌ [USER_PERMISSION] ${error}`);
+        console.error(`❌ [USER_PERMISSION] Room users:`, room.users.map(u => ({ socketId: u.socketId, userId: u.userId, username: u.username, role: u.role })));
+        if (callback) callback({ success: false, error: "User not found in room" });
+        return;
+      }
+      
+      if (requester.role !== 'teacher') {
+        const error = `User ${requester.username} (${requester.userId}) is not a teacher. Role: ${requester.role}`;
+        console.error(`❌ [USER_PERMISSION] ${error}`);
+        if (callback) callback({ success: false, error: "Only teachers can change user permissions" });
+        return;
+      }
+      
+      console.log(`✅ [USER_PERMISSION] Teacher validation passed: ${requester.username} (${requester.userId})`);
+
+      // Remove the individual user permission
+      try {
+        // Update the in-memory room object
+        if (room.userPermissions && room.userPermissions.has(String(targetUserId))) {
+          room.userPermissions.delete(String(targetUserId));
+        }
+        
+        console.log('[DEBUG][REMOVE-PERM] userPermissions map BEFORE:', Array.from(room.userPermissions.entries()));
+        room.userPermissions.delete(String(targetUserId));
+        console.log('[DEBUG][REMOVE-PERM] userPermissions map AFTER:', Array.from(room.userPermissions.entries()));
+        
+        console.log(`✅ [USER_PERMISSION] Removed permission for user ${targetUserId}`);
+        
+        // Update student list and broadcast to all users
+        updateStudentList(roomId);
+        emitRoomUsersUpdated(io, roomId);
+        
+        // Send updated student list to ALL users in the room (not just teachers)
+        // This ensures students can see their permission changes immediately
+        const studentList = getStudentList(roomId);
+        console.log(`📤 [USER_PERMISSION] Sending updated student list to ALL users in room:`, studentList);
+        room.users.forEach(user => {
+          io.to(user.socketId).emit('update-student-list', { students: studentList });
+          console.log(`📤 [USER_PERMISSION] Sent student list to user ${user.username} (${user.socketId}): ${studentList.length} students`);
+        });
+        
+        // Notify the target user specifically
+        const targetUser = room.users.find(u => u.userId === targetUserId);
+        if (targetUser) {
+          io.to(targetUser.socketId).emit("user-permission-changed", {
+            canEdit: room.roomPermission || false, // Fall back to room-wide setting
+            grantedBy: null,
+            reason: 'Permission removed, using room-wide setting'
+          });
+        }
+        
+        // Send acknowledgment callback to the teacher
+        if (callback) {
+          callback({
+            success: true,
+            targetUserId
+          });
+        }
+        
+        // Also emit the event for consistency
+        socket.emit("user-permission-removed", {
+          success: true,
+          targetUserId
+        });
+      } catch (error) {
+        console.error(`❌ [USER_PERMISSION] Error removing permission:`, error);
+        const errorMsg = error.message || 'Unknown error';
+        if (callback) callback({ success: false, error: errorMsg });
+        socket.emit("user-permission-error", { error: errorMsg });
+      }
+    } catch (error) {
+      console.error(`❌ [USER_PERMISSION] Error handling remove-user-permission:`, error);
+      const errorMsg = "Server error";
+      if (callback) callback({ success: false, error: errorMsg });
+      socket.emit("user-permission-error", { error: errorMsg });
+    }
+  });
 
   // Cursor/caret presence feature removed intentionally
 
@@ -1096,27 +1518,96 @@ export const registerRoomHandlers = (io, socket) => {
       // NEW: Always broadcast full room state after leave
       broadcastRoomState(io, roomId, 'user-left');
 
-      // Clean up empty rooms
-      if (room.users.length === 0) {
-        console.log(`Room ${roomId} is now empty, cleaning up`);
-        delete rooms[roomId];
-      }
+                // Clean up empty rooms
+          if (room.users.length === 0) {
+            console.log(`Room ${roomId} is now empty, cleaning up`);
+            delete rooms[roomId];
+            // Clean up rate limiting data for this room
+            delete roomStateRequestCounts[roomId];
+          }
 
       logRoomsState();
     } catch (error) {
       console.error(`Error leaving room:`, error);
     }
-  })
+  });
+
+  // Handle ping events for keepalive
+  socket.on("ping", () => {
+    console.log(`💓 [KEEPALIVE] Received ping from ${socket.id}`);
+    // Respond with pong to keep connection alive
+    socket.emit("pong");
+  });
 
   // Handle room state requests for synchronization
   socket.on("request-room-state", ({ roomId }, callback) => {
-    // console.log(`📥 [ROOM_STATE] State requested for room ${roomId} by ${socket.id}`);
+    // Server-side throttling to prevent infinite loops
+    const now = Date.now();
+    const socketKey = `${socket.id}:${roomId}`;
+    
+    if (!lastRoomStateRequestTimes) {
+      lastRoomStateRequestTimes = {};
+    }
+    
+    if (lastRoomStateRequestTimes[socketKey] && now - lastRoomStateRequestTimes[socketKey] < 10000) {
+      console.log(`⏸️ [ROOM_STATE] Throttled request from ${socket.id} for room ${roomId} - too soon since last request (${now - lastRoomStateRequestTimes[socketKey]}ms ago)`);
+      if (callback) {
+        callback({
+          success: false,
+          error: 'Request throttled - please wait 10 seconds before requesting again',
+          timestamp: new Date().toISOString()
+        });
+      }
+      return;
+    }
+    
+    lastRoomStateRequestTimes[socketKey] = now;
+    
+    // Global rate limiting: prevent more than 5 requests per room per minute
+    if (!roomStateRequestCounts[roomId]) {
+      roomStateRequestCounts[roomId] = { count: 0, resetTime: now + 60000 };
+    }
+    
+    if (now > roomStateRequestCounts[roomId].resetTime) {
+      roomStateRequestCounts[roomId] = { count: 1, resetTime: now + 60000 };
+    } else {
+      roomStateRequestCounts[roomId].count++;
+    }
+    
+    if (roomStateRequestCounts[roomId].count > 5) {
+      console.log(`🚫 [ROOM_STATE] Global rate limit exceeded for room ${roomId} - ${roomStateRequestCounts[roomId].count} requests in last minute`);
+      if (callback) {
+        callback({
+          success: false,
+          error: 'Room state request rate limit exceeded - too many requests for this room',
+          timestamp: new Date().toISOString()
+        });
+      }
+      return;
+    }
+    
+    // Clean up old throttle entries (older than 1 minute) to prevent memory leaks
+    const oneMinuteAgo = now - 60000;
+    Object.keys(lastRoomStateRequestTimes).forEach(key => {
+      if (lastRoomStateRequestTimes[key] < oneMinuteAgo) {
+        delete lastRoomStateRequestTimes[key];
+      }
+    });
+    
+    // Clean up old global rate limiting data
+    Object.keys(roomStateRequestCounts).forEach(roomIdKey => {
+      if (roomStateRequestCounts[roomIdKey].resetTime < now) {
+        delete roomStateRequestCounts[roomIdKey];
+      }
+    });
+    
+    console.log(`📥 [ROOM_STATE] State requested for room ${roomId} by ${socket.id} (room count: ${roomStateRequestCounts[roomId].count})`);
 
     try {
       const state = getRoomState(roomId);
 
       if (state) {
-        // console.log(`✅ [ROOM_STATE] Sending state for room ${roomId}`);
+        console.log(`✅ [ROOM_STATE] Sending state for room ${roomId}`);
         if (callback) {
           callback({
             success: true,
@@ -1125,7 +1616,7 @@ export const registerRoomHandlers = (io, socket) => {
           });
         }
       } else {
-        console.warn(`⚠️ [ROOM_STATE] Room ${roomId} not found`);
+        console.log(`⚠️ [ROOM_STATE] Room ${roomId} not found - this is normal for new rooms`);
         if (callback) {
           callback({
             success: false,
@@ -1151,6 +1642,15 @@ export const registerRoomHandlers = (io, socket) => {
     const userId = socket.userId;
     const username = socket.username;
     console.log(`User disconnected: ${username || 'Unknown'} (${userId || socket.id})`);
+
+    // Clean up throttle entries for this socket to prevent memory leaks
+    if (lastRoomStateRequestTimes) {
+      Object.keys(lastRoomStateRequestTimes).forEach(key => {
+        if (key.startsWith(socket.id + ':')) {
+          delete lastRoomStateRequestTimes[key];
+        }
+      });
+    }
 
     try {
       // Find all rooms the user was in
@@ -1198,6 +1698,5 @@ export const registerRoomHandlers = (io, socket) => {
     } catch (error) {
       console.error("Error in disconnect handler:", error);
     }
-  })
+  });
 }
-

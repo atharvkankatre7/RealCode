@@ -78,7 +78,12 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
                         setRoomState(response.state);
                         resolve(response.state);
                     } else {
-                        console.error('❌ [ROOM_STATE] Failed to get room state:', response?.error);
+                        // Don't log as error for "Room not found" - this is normal for new rooms
+                        if (response?.error && response.error.includes('Room not found')) {
+                            console.log('ℹ️ [ROOM_STATE] Room not found - this is normal for new rooms:', response.error);
+                        } else {
+                            console.error('❌ [ROOM_STATE] Failed to get room state:', response?.error);
+                        }
                         resolve(null);
                     }
                 });

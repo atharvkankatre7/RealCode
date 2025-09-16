@@ -16,7 +16,12 @@ export default function PermissionStatusIndicator({
   showLabel = true,
   size = 'md'
 }: PermissionStatusIndicatorProps) {
-  const { canEdit, isTeacher } = useEditPermission();
+  const { canEdit, isTeacher, students } = useEditPermission();
+  
+  // Check if current user has individual permission
+  const currentUser = students.find(s => s.userId === (typeof window !== 'undefined' ? localStorage.getItem('userId') : null));
+  const hasIndividualPermission = currentUser?.hasIndividualPermission;
+  const permissionGrantedBy = currentUser?.permissionGrantedBy;
 
   const getStatusConfig = () => {
     if (isTeacher) {
@@ -32,15 +37,27 @@ export default function PermissionStatusIndicator({
     }
 
     if (canEdit) {
-      return {
-        icon: FiEdit3,
-        label: 'Editor',
-        description: 'Can edit code',
-        bgColor: 'bg-green-100',
-        textColor: 'text-green-800',
-        iconColor: 'text-green-600',
-        borderColor: 'border-green-200'
-      };
+      if (hasIndividualPermission) {
+        return {
+          icon: FiEdit3,
+          label: 'Individual Editor',
+          description: `Can edit code (granted by ${permissionGrantedBy || 'teacher'})`,
+          bgColor: 'bg-green-100',
+          textColor: 'text-green-800',
+          iconColor: 'text-green-600',
+          borderColor: 'border-green-200'
+        };
+      } else {
+        return {
+          icon: FiEdit3,
+          label: 'Room Editor',
+          description: 'Can edit code (room-wide setting)',
+          bgColor: 'bg-green-100',
+          textColor: 'text-green-800',
+          iconColor: 'text-green-600',
+          borderColor: 'border-green-200'
+        };
+      }
     }
 
     return {

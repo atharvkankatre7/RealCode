@@ -8,7 +8,7 @@ import { useEditPermission } from '@/context/EditPermissionContext';
 import { useSocketService } from '@/hooks/useSocketService';
 
 export default function TeacherControlPanel() {
-    const { isTeacher, students, canEdit, toggleRoomPermission } = useEditPermission();
+    const { isTeacher, students, globalCanEdit, toggleRoomPermission } = useEditPermission();
     const { isReady, isConnected } = useSocketService();
     const [pending, setPending] = useState(false);
 
@@ -16,11 +16,11 @@ export default function TeacherControlPanel() {
     const [teacherActionCount, setTeacherActionCount] = useState(0);
 
     // Debug log on every render
-    console.log('🚨 Button Rendered | canEdit =', canEdit);
+    console.log('🚨 Button Rendered | globalCanEdit =', globalCanEdit);
 
     useEffect(() => {
-        console.log('Teacher Button - canEdit =', canEdit);
-    }, [canEdit]);
+        console.log('Teacher Button - globalCanEdit =', globalCanEdit);
+    }, [globalCanEdit]);
 
     const handleRoomToggle = () => {
         console.log('[DEBUG][Teacher] Toggle button clicked. isTeacher:', isTeacher, 'pending:', pending, 'isReady:', isReady, 'isConnected:', isConnected);
@@ -42,10 +42,10 @@ export default function TeacherControlPanel() {
 
     // PermissionToggleButton with local state fallback (for debugging)
     function PermissionToggleButton() {
-        const [localEditState, setLocalEditState] = useState(canEdit);
+        const [localEditState, setLocalEditState] = useState(globalCanEdit);
         useEffect(() => {
-            setLocalEditState(canEdit);
-        }, [canEdit]);
+            setLocalEditState(globalCanEdit);
+        }, [globalCanEdit]);
         console.log('[Button] Local State =', localEditState);
         return (
             <button
@@ -99,16 +99,16 @@ export default function TeacherControlPanel() {
                     <div>
                         <h3 className="text-white font-medium mb-1">Room Edit Mode</h3>
                         <p className="text-zinc-400 text-sm">
-                            {canEdit ? 'All students can edit.' : 'Students can only view.'}
+                            {globalCanEdit ? 'All students can edit.' : 'Students can only view.'}
                         </p>
                     </div>
-                    <div key={String(canEdit)}>
+                    <div key={String(globalCanEdit)}>
                         <PermissionToggleButton />
                     </div>
                 </div>
             </div>
-            {/* Debug: show canEdit live */}
-            <p className="text-xs text-gray-500 mt-1">canEdit: {String(canEdit)}</p>
+            {/* Debug: show globalCanEdit live */}
+            <p className="text-xs text-gray-500 mt-1">globalCanEdit: {String(globalCanEdit)}</p>
             {/* Teacher Permission Badge with animation */}
             <div className="mb-4 flex justify-end">
                 <PermissionBadge teacherActionTrigger={teacherActionCount} />

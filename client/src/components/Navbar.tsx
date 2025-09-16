@@ -81,22 +81,52 @@ const Navbar = () => {
                 <FiChevronDown className={`ml-1 text-gray-400 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
               </button>
               {showUserDropdown && (
-                <div ref={dropdownRef} className="absolute right-0 mt-2 w-64 bg-zinc-900 border border-zinc-700 rounded-lg shadow-lg z-50 animate-fade-in">
-                  <div className="px-4 py-2 text-xs text-gray-400 font-semibold border-b border-zinc-800">Active Users ({users.length})</div>
-                  <div className="max-h-60 overflow-y-auto divide-y divide-zinc-800">
+                <div ref={dropdownRef} className="absolute right-0 mt-2 w-64 bg-zinc-900/95 backdrop-blur-sm border border-white/5 rounded-xl shadow-xl z-50 animate-fade-in">
+                  {/* Enhanced Title */}
+                  <div className="px-3 py-3 mb-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-semibold text-white">Active Users</h3>
+                      <span className="text-sm text-zinc-400 font-medium">({users.length})</span>
+                    </div>
+                  </div>
+                  
+                  {/* Enhanced User List */}
+                  <div className="max-h-60 overflow-y-auto space-y-1 px-2 pb-2">
                     {users
                       .sort((a, b) => (a.role === 'teacher' ? -1 : 1))
-                      .map((user) => (
-                        <div
+                      .map((user, index) => (
+                        <motion.div
                           key={user.userId}
-                          className={`flex items-center gap-2 px-4 py-2 hover:bg-zinc-800 transition-colors ${user.role === 'teacher' ? 'border-l-4 border-blue-500 bg-blue-950/30' : ''}`}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.2, delay: index * 0.05 }}
+                          className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/5 transition-all duration-150 group"
                         >
-                          <span className="text-xl">
+                          {/* Enhanced Avatar */}
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-lg">
                             {user.role === 'teacher' ? '👨‍🏫' : '👨‍🎓'}
-                          </span>
-                          <span className="font-medium text-white text-sm">{user.username}{user.userId === currentUserId ? ' (you)' : ''}</span>
-                          <span className={`ml-auto px-2 py-0.5 rounded text-xs font-semibold ${user.role === 'teacher' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'}`}>{user.role}</span>
-                        </div>
+                          </div>
+                          
+                          {/* Username with enhanced styling */}
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium text-white text-sm">{user.username}</span>
+                            {user.userId === currentUserId && (
+                              <span className="ml-2 text-xs text-zinc-400 font-normal">(you)</span>
+                            )}
+                          </div>
+                          
+                          {/* Enhanced Role Badge */}
+                          <div
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              user.role === 'teacher'
+                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                : 'bg-green-500/20 text-green-400 border border-green-500/30'
+                            }`}
+                          >
+                            {user.role}
+                          </div>
+                        </motion.div>
                       ))}
                   </div>
                 </div>

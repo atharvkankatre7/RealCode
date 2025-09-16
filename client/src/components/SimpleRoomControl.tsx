@@ -6,21 +6,21 @@ import { useEditPermission } from '@/context/EditPermissionContext';
 import { FiLock, FiUnlock } from 'react-icons/fi';
 
 export default function SimpleRoomControl() {
-  const { isTeacher, canEdit, toggleRoomPermission, students } = useEditPermission();
+  const { isTeacher, globalCanEdit, toggleRoomPermission, students } = useEditPermission();
   const [isToggling, setIsToggling] = useState(false);
-  const [displayState, setDisplayState] = useState(canEdit);
+  const [displayState, setDisplayState] = useState(globalCanEdit);
 
   // Sync display state with actual state (with smooth transitions)
   useEffect(() => {
     // Add small delay for smooth visual transitions
     const timer = setTimeout(() => {
-      setDisplayState(canEdit);
+      setDisplayState(globalCanEdit);
     }, isToggling ? 0 : 100);
 
     return () => clearTimeout(timer);
-  }, [canEdit, isToggling]);
+  }, [globalCanEdit, isToggling]);
 
-  console.log('[ICON] Rendered with canEdit =', canEdit);
+  console.log('[ICON] Rendered with globalCanEdit =', globalCanEdit);
 
   // Only show for teachers
   if (!isTeacher) {
@@ -43,17 +43,17 @@ export default function SimpleRoomControl() {
     const newCanEdit = !displayState;
     setDisplayState(newCanEdit);
 
-    console.log(`🎯 [RBAC] Toggling room permission. Current: ${canEdit} → ${newCanEdit}`);
+    console.log(`🎯 [RBAC] Toggling room permission. Current: ${globalCanEdit} → ${newCanEdit}`);
 
     toggleRoomPermission((err, response) => {
       if (err) {
         console.error(`❌ [RBAC] Toggle failed:`, err);
         // Revert optimistic update on error
-        setDisplayState(canEdit);
+        setDisplayState(globalCanEdit);
         showToast(`Failed to toggle: ${err}`, 'error');
       } else {
         console.log(`✅ [RBAC] Toggle successful:`, response);
-        // Server response will update canEdit, which will sync displayState
+        // Server response will update state via events
         showToast(
           response?.canEdit
             ? '✅ Students can now edit'
@@ -86,76 +86,89 @@ export default function SimpleRoomControl() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="fixed top-4 left-4 z-40 bg-zinc-900 rounded-xl shadow-lg border border-zinc-700 p-4 min-w-[280px]"
+      className="fixed top-4 left-4 z-40 bg-zinc-900/95 backdrop-blur-sm rounded-xl shadow-xl border border-white/5 p-5 min-w-[300px]"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-white font-medium">Room Control</h3>
+      {/* Header with Enhanced Badge */}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold text-white">Room Control</h3>
         <motion.div
           animate={{
             backgroundColor: displayState ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)',
             color: displayState ? 'rgb(74, 222, 128)' : 'rgb(248, 113, 113)'
           }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
-          className="px-2 py-1 rounded-full text-xs font-medium"
+          className="px-3 py-1.5 rounded-full text-xs font-medium border border-current/20"
         >
-          {displayState ? 'Editable' : 'Read-Only'}
+          {displayState ? '✏️ Editable' : '👁️ Read-Only'}
         </motion.div>
       </div>
 
-      {/* Status */}
-      <motion.p
+      {/* Enhanced Status */}
+      <motion.div
         animate={{ opacity: 1 }}
         transition={{ duration: 0.2 }}
         className="text-zinc-400 text-sm mb-4"
       >
-        {students.length} student{students.length !== 1 ? 's' : ''} • {' '}
-        <motion.span
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-zinc-500">👥</span>
+          <span>{students.length} student{students.length !== 1 ? 's' : ''}</span>
+        </div>
+        <motion.div
           key={displayState ? 'editable' : 'readonly'}
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
+          className="text-zinc-300 font-medium"
         >
           {displayState
             ? 'All students can edit the code'
             : 'Students can only view the code'
           }
-        </motion.span>
-      </motion.p>
+        </motion.div>
+      </motion.div>
 
-      {/* Toggle Button - Teacher Only */}
+      {/* Enhanced Toggle Button - Teacher Only */}
       {isTeacher && (
         <motion.button
           whileHover={!isToggling ? { scale: 1.02 } : {}}
           whileTap={!isToggling ? { scale: 0.97 } : {}}
           onClick={handleToggle}
           disabled={isToggling}
-          animate={{
-            backgroundColor: 'rgba(39, 39, 42, 1)',
-            borderColor: 'rgba(71, 85, 105, 1)',
-            color: 'white',
-            opacity: isToggling ? 0.6 : 1
-          }}
-          transition={{ duration: 0.15, ease: "easeInOut" }}
-          className="w-full py-2 px-4 rounded-md font-semibold border border-slate-600 bg-zinc-800 text-white flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm hover:bg-zinc-700 active:scale-[.97] transition-all duration-150"
+          className="w-full py-3 px-5 rounded-lg font-semibold border border-slate-600/50 bg-gradient-to-r from-zinc-800 to-zinc-700 text-white flex items-center justify-center gap-3 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm hover:shadow-md hover:from-zinc-700 hover:to-zinc-600 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
             cursor: isToggling ? 'not-allowed' : 'pointer',
             minWidth: '160px'
           }}
           aria-label="Toggle room permission"
-          title="Change permission for this room"
+          title={displayState ? "Click to make room read-only" : "Click to make room editable"}
         >
-          <span key={canEdit ? 'unlock' : 'lock'} className="w-5 h-5">
-            {canEdit ? <FiUnlock className="w-5 h-5" /> : <FiLock className="w-5 h-5" />}
-          </span>
-          Change Permission
+          <motion.div
+            animate={{ rotate: isToggling ? 180 : 0 }}
+            transition={{ duration: 0.3 }}
+            className="w-4 h-4"
+          >
+            {globalCanEdit ? <FiUnlock className="w-4 h-4" /> : <FiLock className="w-4 h-4" />}
+          </motion.div>
+          <span>Change Permission</span>
         </motion.button>
       )}
 
-      {/* Optional: Show current mode for teacher verification */}
-      <p className="text-sm text-zinc-400 mt-2">
-        Current Mode: {canEdit ? 'Editable' : 'View Only'}
-      </p>
+      {/* Divider */}
+      <div className="w-full h-px bg-zinc-700/50 my-3"></div>
+      
+      {/* Enhanced Current Mode Display */}
+      <motion.div
+        key={globalCanEdit ? 'editable' : 'viewonly'}
+        initial={{ opacity: 0, y: -5 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="text-sm text-zinc-400 text-center"
+      >
+        <span className="text-zinc-500">Current Mode:</span>{' '}
+        <span className="font-medium text-zinc-300">
+          {globalCanEdit ? 'Editable' : 'View Only'}
+        </span>
+      </motion.div>
 
       {/* Student Info Panel */}
       {!isTeacher && (
@@ -173,13 +186,13 @@ export default function SimpleRoomControl() {
         </motion.div>
       )}
 
-      {/* Info */}
-      <div className="mt-3 text-xs text-zinc-500 bg-zinc-800 rounded-lg p-3">
-        <div className="flex items-start gap-2">
-          <span>💡</span>
+      {/* Enhanced Info Section */}
+      <div className="mt-4 text-xs text-zinc-500 bg-zinc-800/50 rounded-lg p-4 border border-zinc-700/30">
+        <div className="flex items-start gap-3">
+          <span className="text-blue-400 text-sm">💡</span>
           <div>
-            <p className="font-medium mb-1">Role-Based Access Control</p>
-            <p>Teachers can always edit. This controls whether students can edit.</p>
+            <p className="font-semibold mb-2 text-zinc-300">Role-Based Access Control</p>
+            <p className="leading-relaxed">Teachers can always edit. This controls whether students can edit.</p>
           </div>
         </div>
       </div>
