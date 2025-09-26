@@ -4,6 +4,7 @@ import RoomForm from "@/components/RoomForm"
 import { motion } from "framer-motion"
 import { FiCode, FiUsers, FiClock, FiActivity } from "react-icons/fi"
 import { useAuth } from "@/context/AuthContext"
+import Link from "next/link"
 
 // Animation variants
 const fadeIn = {
@@ -76,6 +77,19 @@ export default function DashboardPage() {
             Start a new session or join an existing one.
           </motion.p>
         </motion.div>
+
+        {/* Inline login banner when not logged in */}
+        {!user && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="card p-4 flex items-center justify-between"
+          >
+            <p className="text-sm">Please log in to create or join rooms.</p>
+            <Link href="/login" className="btn bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md">Login</Link>
+          </motion.div>
+        )}
 
         {/* Stats Section */}
         <motion.div

@@ -3,8 +3,10 @@ import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
 
-// Use env variable for WebSocket URL
-const TERMINAL_WS_URL = process.env.NEXT_PUBLIC_TERMINAL_WS_URL || "ws://localhost:5002";
+// WebSocket URL: derive from backend URL unless explicitly provided
+const BACKEND_HTTP = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5002";
+const DEFAULT_WS = BACKEND_HTTP.replace(/^http(s?):\/\//, "ws$1://") + "/terminal";
+const TERMINAL_WS_URL = process.env.NEXT_PUBLIC_TERMINAL_WS_URL || DEFAULT_WS;
 
 type TerminalPanelProps = {
   runCode?: string;

@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           // Create user in backend database
           const createUserInBackend = async () => {
             try {
-              const response = await fetch('http://localhost:5002/api/auth/clerk', {
+              const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/clerk`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',

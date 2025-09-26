@@ -35,7 +35,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
       }
       try {
         console.log('🔍 Fetching theme preference for email:', email);
-        const res = await fetch(`http://localhost:5002/api/user/preferences?email=${encodeURIComponent(email)}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user/preferences?email=${encodeURIComponent(email)}`);
         if (res.ok) {
           const data = await res.json();
           console.log('📥 Received preferences data:', data);
@@ -74,7 +74,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     if (!email) return;
     
     console.log('🎨 Saving theme preference to backend:', { email, theme: newTheme });
-    fetch("http://localhost:5002/api/user/preferences", {
+    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user/preferences`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, preferences: { theme: newTheme } }),

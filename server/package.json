@@ -4,7 +4,6 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
     "dev": "nodemon index.js"
   },
@@ -12,16 +11,22 @@
   "author": "",
   "license": "ISC",
   "description": "",
+  "engines": {
+    "node": ">=20.10.0"
+  },
   "dependencies": {
     "@firebase/auth": "^1.10.4",
+    "archiver": "^7.0.1",
+    "compression": "^1.7.5",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "express-rate-limit": "^7.4.0",
     "firebase": "^11.7.3",
     "google-auth-library": "^9.15.1",
+    "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
-    "archiver": "^7.0.1",
-    "express-rate-limit": "^7.4.0",
+    "morgan": "^1.10.0",
     "node-pty": "^1.0.0",
     "nodemailer": "^7.0.3",
     "react-hot-toast": "^2.5.2",

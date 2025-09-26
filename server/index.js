@@ -2,6 +2,10 @@ import express from "express"
 import { createServer } from "http"
 import { Server } from "socket.io"
 import cors from "cors"
+import helmet from "helmet"
+import compression from "compression"
+import morgan from "morgan"
+import rateLimit from "express-rate-limit"
 import { registerRoomHandlers, getRoom } from "./sockets/room.js"
 import authRoutes from "./routes/auth.js"
 import dotenv from "dotenv"
@@ -50,41 +54,86 @@ const app = express()
 console.log('🌐 Creating HTTP server...');
 const httpServer = createServer(app)
 
+// Configurable CORS via env var ALLOWED_ORIGINS (comma-separated)
+const isDev = process.env.NODE_ENV !== 'production';
+const parsedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+const defaultOrigin = process.env.CLIENT_URL || 'http://localhost:3000';
+// In development, allow all origins if ALLOWED_ORIGINS is not provided
+const corsOrigins = parsedOrigins.length > 0 ? parsedOrigins : (isDev ? [] : [defaultOrigin]);
+// Socket.IO CORS origin: use '*' in dev when no explicit list provided to ensure preflight succeeds
+const socketCorsOrigin = (isDev && parsedOrigins.length === 0) ? '*' : corsOrigins;
+
+// Security and performance middlewares
+app.set('trust proxy', 1);
+app.use(helmet());
+app.use(compression());
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
 // Move io definition here so it is available to all routes below
 console.log('🔌 Creating Socket.IO server...');
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:3000", "http://127.0.0.1:3000", "*"], // Allow localhost and all origins
+    origin: socketCorsOrigin,
     methods: ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
-    credentials: false, // Set to false to avoid CORS issues
+    credentials: false,
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "x-user-email"]
   },
-  transports: ['polling', 'websocket'], // Try polling first, then websocket
+  transports: ['polling', 'websocket'],
   pingTimeout: 30000,
   pingInterval: 10000,
   cookie: false,
-  serveClient: true, // Enable serving client files
+  serveClient: false,
   allowEIO3: true,
   connectTimeout: 20000,
   allowRequest: (req, callback) => {
-    // Log all connection attempts
-    console.log(`🔍 Connection attempt from: ${req.headers.origin || 'unknown'}`);
-    console.log(`🔍 User-Agent: ${req.headers['user-agent'] || 'unknown'}`);
-    callback(null, true); // Allow all connections
+    const origin = req.headers.origin || '';
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (isDev && parsedOrigins.length === 0) {
+      // In dev with no explicit ALLOWED_ORIGINS, allow all
+      return callback(null, true);
+    }
+    if (corsOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    console.warn(`🚫 Blocked Socket.IO connection from origin: ${origin}`);
+    return callback(null, false);
   }
-})
+});
 
 app.use(
   cors({
-    origin: "*", // Allow all origins for testing
+    origin: (origin, callback) => {
+      // Allow non-browser requests (no Origin)
+      if (!origin) return callback(null, true);
+      // In development with no explicit ALLOWED_ORIGINS, allow all
+      if (isDev && parsedOrigins.length === 0) return callback(null, true);
+      // Otherwise restrict to configured origins
+      if (corsOrigins.includes(origin)) return callback(null, true);
+      console.warn(`🚫 CORS blocked origin: ${origin}`);
+      return callback(new Error('Not allowed by CORS'));
+    },
     methods: ["GET", "POST", "OPTIONS", "PUT", "DELETE", "PATCH"],
-    credentials: false, // Set to false to avoid CORS issues
+    credentials: false,
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "x-user-email"]
   })
 )
 
-// Add body parser middleware
-app.use(express.json())
+// Add body parser middleware with sane limit
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }))
+
+// Basic API rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use('/api', limiter);
 
 // Add health check endpoint
 app.get('/health', (_, res) => {
@@ -297,7 +346,11 @@ io.on("connection", (socket) => {
 })
 
 // --- Terminal WebSocket Server Integration ---
-const terminalWss = new WebSocketServer({ server: httpServer, path: "/terminal" });
+// Gate the terminal/code-execution feature for production safety
+const ENABLE_TERMINAL = process.env.ENABLE_TERMINAL ? (process.env.ENABLE_TERMINAL === 'true') : isDev;
+let terminalWss;
+if (ENABLE_TERMINAL) {
+  terminalWss = new WebSocketServer({ server: httpServer, path: "/terminal" });
 
 // Function to detect Java installations
 function detectJavaInstallations() {
@@ -938,8 +991,9 @@ terminalWss.on("connection", (ws) => {
     } catch (cleanupErr) {
       console.error('Error in WebSocket error cleanup:', cleanupErr.message);
     }
-  });
 });
+});
+}
 
 // TEST ROUTE: Create a Room document
 app.post('/api/test-create-room', async (req, res) => {
@@ -1036,4 +1090,4 @@ httpServer.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`)
   console.log(`🌐 Server URL: http://localhost:${PORT}`)
   console.log(`🔗 Client URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}`)
-})
+});

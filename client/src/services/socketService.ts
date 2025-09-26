@@ -97,7 +97,8 @@ class SocketService {
     if (!this.socket) {
       console.log('🔌 Creating new socket connection...');
       this.socket = io(SOCKET_URL, {
-        transports: ['polling', 'websocket'], // Try polling first, then upgrade to websocket
+        // Try polling first, then upgrade to WebSocket (more robust in diverse dev environments)
+        transports: ['polling', 'websocket'],
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
         timeout: 10000,

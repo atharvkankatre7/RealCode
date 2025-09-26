@@ -6,6 +6,7 @@ import { motion, useScroll, useTransform } from "framer-motion"
 import { useInView } from "react-intersection-observer"
 import Link from "next/link"
 import { FiCode, FiUsers, FiLock, FiGlobe, FiArrowRight, FiGithub } from "react-icons/fi"
+import { useAuth } from "@/context/AuthContext"
 
 // Animation variants
 const fadeIn = {
@@ -66,6 +67,7 @@ const CodeBlock = () => {
 
 export default function HomePage() {
   const router = useRouter()
+  const { user, loading } = useAuth()
   const { scrollYProgress } = useScroll()
   const heroRef = useRef(null)
   const { ref: inViewRef, inView: isHeroInView } = useInView({ threshold: 0.1 })
@@ -131,14 +133,16 @@ export default function HomePage() {
             <FiArrowRight className="group-hover:translate-x-1 transition-transform" />
           </motion.button>
 
-          <motion.button
-            onClick={() => router.push('/login')}
-            className="btn px-8 py-3 bg-transparent border-2 border-blue-500 text-blue-500 dark:text-blue-400 rounded-full text-lg font-medium"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            Login
-          </motion.button>
+          {!loading && !user && (
+            <motion.button
+              onClick={() => router.push('/login')}
+              className="btn px-8 py-3 bg-transparent border-2 border-blue-500 text-blue-500 dark:text-blue-400 rounded-full text-lg font-medium"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              Login
+            </motion.button>
+          )}
         </motion.div>
 
         <motion.div
@@ -210,12 +214,6 @@ export default function HomePage() {
           >
             Join thousands of developers who are already using RealCode for their team projects.
           </motion.p>
-          <motion.button
-            className="btn bg-blue-500 text-white px-8 py-3 rounded-full text-lg font-medium mx-auto"
-            variants={fadeIn}
-          >
-            Sign Up For Free
-            </motion.button>
         </div>
       </motion.section>
 
@@ -233,27 +231,27 @@ export default function HomePage() {
             <div className="flex-1 min-w-[180px]">
               <h4 className="text-lg font-semibold mb-4">Product</h4>
               <ul className="space-y-2">
-                <li><Link href="/features" className="text-gray-400 hover:text-white transition-colors">Features</Link></li>
-                <li><Link href="/pricing" className="text-gray-400 hover:text-white transition-colors">Pricing</Link></li>
-                <li><Link href="/docs" className="text-gray-400 hover:text-white transition-colors">Documentation</Link></li>
+                <li><Link href="/features" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Features</Link></li>
+                <li><Link href="/pricing" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Pricing</Link></li>
+                <li><Link href="/docs" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Documentation</Link></li>
               </ul>
             </div>
 
             <div className="flex-1 min-w-[180px]">
               <h4 className="text-lg font-semibold mb-4">Company</h4>
               <ul className="space-y-2">
-                <li><Link href="/about" className="text-gray-400 hover:text-white transition-colors">About Us</Link></li>
-                <li><Link href="/blog" className="text-gray-400 hover:text-white transition-colors">Blog</Link></li>
-                <li><Link href="/careers" className="text-gray-400 hover:text-white transition-colors">Careers</Link></li>
+                <li><Link href="/about" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">About Us</Link></li>
+                <li><Link href="/blog" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Blog</Link></li>
+                <li><Link href="/careers" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Careers</Link></li>
               </ul>
             </div>
 
             <div className="flex-1 min-w-[180px]">
               <h4 className="text-lg font-semibold mb-4">Connect</h4>
               <ul className="space-y-2">
-                <li><Link href="/contact" className="text-gray-400 hover:text-white transition-colors">Contact Us</Link></li>
-                <li><Link href="https://twitter.com" className="text-gray-400 hover:text-white transition-colors">Twitter</Link></li>
-                <li><Link href="https://github.com" className="text-gray-400 hover:text-white transition-colors flex items-center"><FiGithub className="mr-2" /> GitHub</Link></li>
+                <li><Link href="/contact" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Contact Us</Link></li>
+                <li><Link href="https://twitter.com" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Twitter</Link></li>
+                <li><Link href="https://github.com" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors flex items-center"><FiGithub className="mr-2" /> GitHub</Link></li>
               </ul>
             </div>
           </div>

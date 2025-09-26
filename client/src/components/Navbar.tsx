@@ -22,6 +22,7 @@ const Navbar = () => {
   const { users } = useEditPermission();
   const pathname = usePathname();
   const isEditorRoute = /^\/editor\//.test(pathname ?? "");
+  const hideThemeToggle = pathname === "/" || pathname === "/dashboard";
   const dropdownRef = useRef<HTMLDivElement>(null);
   const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
 
@@ -133,15 +134,17 @@ const Navbar = () => {
               )}
             </div>
           )}
-          {/* Simple Theme Toggle */}
-          <button
-            aria-label="Toggle theme"
-            className="flex items-center justify-center w-10 h-10 rounded-full bg-zinc-800 hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onClick={toggleTheme}
-            title="Toggle theme"
-          >
-            {theme === "light" ? <FiMoon className="text-blue-400" /> : <FiSun className="text-yellow-300" />}
-          </button>
+          {/* Simple Theme Toggle (hidden on home and dashboard) */}
+          {!hideThemeToggle && (
+            <button
+              aria-label="Toggle theme"
+              className="flex items-center justify-center w-10 h-10 rounded-full bg-zinc-800 hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onClick={toggleTheme}
+              title="Toggle theme"
+            >
+              {theme === "light" ? <FiMoon className="text-blue-400" /> : <FiSun className="text-yellow-300" />}
+            </button>
+          )}
           {/* Profile Icon (right) */}
           {user && (
             <button
@@ -175,18 +178,20 @@ const Navbar = () => {
             transition={{ duration: 0.2 }}
           >
             <div className="flex flex-col space-y-4">
-              {/* Theme Toggle */}
-              <div className="flex justify-center py-2">
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={toggleTheme}
-                  className={`p-3 rounded-full ${theme === "light" ? "bg-yellow-400 text-yellow-900" : "bg-indigo-600 text-white"}`}
-                  title="Toggle theme"
-                >
-                  {theme === "light" ? <FiMoon /> : <FiSun />}
-                </motion.button>
-              </div>
+              {/* Theme Toggle (hidden on home and dashboard) */}
+              {!hideThemeToggle && (
+                <div className="flex justify-center py-2">
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={toggleTheme}
+                    className={`p-3 rounded-full ${theme === "light" ? "bg-yellow-400 text-yellow-900" : "bg-indigo-600 text-white"}`}
+                    title="Toggle theme"
+                  >
+                    {theme === "light" ? <FiMoon /> : <FiSun />}
+                  </motion.button>
+                </div>
+              )}
 
               {user ? (
                 <>
