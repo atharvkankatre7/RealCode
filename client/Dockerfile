@@ -1,5 +1,5 @@
 # Next.js production image
-FROM node:20.12.2-alpine AS deps
+FROM mcr.microsoft.com/cbl-mariner/base/nodejs:18 AS deps
 WORKDIR /app
 # Install all deps for building
 RUN corepack enable
@@ -9,7 +9,7 @@ RUN \
   elif [ -f package-lock.json ]; then npm ci; \
   else npm install; fi
 
-FROM node:20.12.2-alpine AS builder
+FROM mcr.microsoft.com/cbl-mariner/base/nodejs:18 AS builder
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
@@ -17,7 +17,7 @@ COPY client/ ./
 # Build Next.js
 RUN npm run build || yarn build
 
-FROM node:20.12.2-alpine AS runner
+FROM mcr.microsoft.com/cbl-mariner/base/nodejs:18 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 # Create non-root user

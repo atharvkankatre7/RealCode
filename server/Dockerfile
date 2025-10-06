@@ -1,5 +1,5 @@
 # Dependencies stage
-FROM node:20.12.2-slim AS base
+FROM mcr.microsoft.com/cbl-mariner/base/nodejs:18 AS base
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -13,14 +13,12 @@ COPY server/package.json server/package-lock.json* ./
 RUN npm ci --omit=dev || npm install --omit=dev
 
 # Runtime stage
-FROM node:20.12.2-slim AS runtime
+FROM mcr.microsoft.com/cbl-mariner/base/nodejs:18 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
 # Install runtime tools
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-  && rm -rf /var/lib/apt/lists/*
+RUN tdnf update -y && tdnf install -y curl && tdnf clean all
 
 # Create non-root user
 RUN groupadd -r nodegrp && useradd -r -g nodegrp nodeusr
