@@ -4,7 +4,8 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 
-dotenv.config();
+// Load environment variables
+dotenv.config({ path: './server/.env' });
 
 async function fixMongoIndex() {
   try {
