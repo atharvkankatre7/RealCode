@@ -24,6 +24,38 @@ import codeHistoryRoutes from "./routes/codeHistory.js"
 import commentRoutes from "./routes/comments.js"
 import adminRoutes from "./routes/admin.js"
 
+// Performance optimizations
+const EXECUTION_CACHE = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+
+// Process warm-up - periodically run lightweight commands to keep runtimes warm
+function warmUpRuntimes() {
+  const warmUpCommands = [
+    { cmd: 'python3', args: ['-c', 'print("ready")'], name: 'Python' },
+    { cmd: 'java', args: ['-version'], name: 'Java' },
+    { cmd: 'node', args: ['-v'], name: 'Node.js' }
+  ];
+
+  warmUpCommands.forEach(({ cmd, args, name }) => {
+    try {
+      const process = spawn(cmd, args, { stdio: 'ignore' });
+      process.on('close', () => {
+        console.log(`🔥 ${name} runtime warmed up`);
+      });
+      process.on('error', () => {
+        // Silently ignore warm-up errors
+      });
+    } catch (err) {
+      // Silently ignore warm-up errors
+    }
+  });
+}
+
+// Warm up runtimes every 2 minutes
+setInterval(warmUpRuntimes, 2 * 60 * 1000);
+// Initial warm-up
+setTimeout(warmUpRuntimes, 5000); // Wait 5 seconds after server start
+
 // Load environment variables
 dotenv.config()
 
@@ -473,24 +505,26 @@ const languageConfig = {
   python: {
     ext: 'py',
     cmd: ['python3'],
-    args: [],
+    args: ['-u'], // Unbuffered output for faster response
     runCmd: ['python3'],
-    runArgs: [],
-    fallbackCmd: ['python'] // Fallback for systems where python3 is not available
+    runArgs: ['-u'], // Unbuffered output
+    fallbackCmd: ['python'], // Fallback for systems where python3 is not available
+    fastExec: true // Enable fast execution mode
   },
   java: {
     ext: 'java',
     cmd: isWindows ? (hasJavac ? [path.join(exactJavaPath, 'javac.exe')] : ['javac']) : ['javac'],
-    args: [],
+    args: ['-J-Xms32m', '-J-Xmx128m'], // Optimize JVM memory for faster startup
     runCmd: isWindows ? (hasJavac ? [path.join(exactJavaPath, 'java.exe')] : ['java']) : ['java'],
-    runArgs: [],
+    runArgs: ['-Xms32m', '-Xmx128m', '-XX:+UseSerialGC'], // Fast JVM startup options
     env: {
       ...process.env,
       // Set JAVA_HOME if available
       ...(process.env.JAVA_HOME ? {} : { JAVA_HOME: '/usr/lib/jvm/java-17-openjdk-amd64' }),
       PATH: process.env.PATH + (isWindows ? javaPathString : '')
     },
-    canCompile: isWindows ? hasJavac : true // Assume javac is available on Linux
+    canCompile: isWindows ? hasJavac : true, // Assume javac is available on Linux
+    fastExec: true // Enable fast execution optimizations
   },
   csharp: {
     ext: 'cs',
@@ -833,6 +867,9 @@ terminalWss.on("connection", (ws) => {
             return;
           }
           
+          // Show compilation progress
+          ws.send(JSON.stringify({ type: "output", data: "🔨 Compiling Java code...\r\n" }));
+          
           // Debug: Log the Java code being compiled
           console.log(`🔍 Compiling Java file: ${filePath}`);
           console.log(`🔍 Java code: ${code.substring(0, 200)}...`);
@@ -841,7 +878,8 @@ terminalWss.on("connection", (ws) => {
           try {
             const compileOptions = {
               cwd: tempDir,
-              env: config.env || process.env
+              env: config.env || process.env,
+              stdio: ['pipe', 'pipe', 'pipe'] // Optimize stdio for faster compilation
             };
             
             console.log(`🔍 Using javac: ${config.cmd[0]}`);
@@ -872,10 +910,11 @@ terminalWss.on("connection", (ws) => {
             
             compileProcess.once('close', (code) => {
               if (code !== 0) {
-                ws.send(JSON.stringify({ type: "output", data: 'Compilation failed\r\n' }));
+                ws.send(JSON.stringify({ type: "output", data: '❌ Compilation failed\r\n' }));
                 try { fs.unlinkSync(filePath); } catch {}
                 return;
               }
+              ws.send(JSON.stringify({ type: "output", data: '✅ Compilation successful! Running...\r\n' }));
               runCodeWithInput(config.runCmd[0], config.runArgs);
             });
           } catch (err) {
@@ -941,7 +980,18 @@ terminalWss.on("connection", (ws) => {
             try { fs.unlinkSync(filePath); } catch {}
           }
         } else {
-          // Direct execution
+          // Direct execution with progress indicator
+          if (language === 'python') {
+            ws.send(JSON.stringify({ type: "output", data: "🐍 Running Python code...\r\n" }));
+          } else if (language === 'javascript') {
+            ws.send(JSON.stringify({ type: "output", data: "🛫 Running JavaScript code...\r\n" }));
+          } else if (language === 'go') {
+            ws.send(JSON.stringify({ type: "output", data: "🚀 Running Go code...\r\n" }));
+          } else if (language === 'ruby') {
+            ws.send(JSON.stringify({ type: "output", data: "💎 Running Ruby code...\r\n" }));
+          } else {
+            ws.send(JSON.stringify({ type: "output", data: `▶️ Running ${language} code...\r\n` }));
+          }
           runCodeWithInput(config.cmd[0], config.args);
         }
         
