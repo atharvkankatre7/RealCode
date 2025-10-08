@@ -95,6 +95,21 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
     }
 
     setSaving(true);
+    
+    const requestData = {
+      userId: user.email,
+      title: saveTitle || 'Untitled Code',
+      code: currentCode,
+      language: currentLanguage,
+      description: saveDescription,
+      tags: saveTags.split(',').map(tag => tag.trim()).filter(tag => tag)
+    };
+    
+    console.log('💾 Saving code with data:', {
+      ...requestData,
+      code: `${currentCode.substring(0, 100)}... (${currentCode.length} chars)`
+    });
+    
     try {
       const response = await fetch(`${API_URL}/api/code-history/save`, {
         method: 'POST',
@@ -102,18 +117,14 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
           'Content-Type': 'application/json',
           'x-user-email': user.email
         },
-        body: JSON.stringify({
-          userId: user.email,
-          title: saveTitle || 'Untitled Code',
-          code: currentCode,
-          language: currentLanguage,
-          description: saveDescription,
-          tags: saveTags.split(',').map(tag => tag.trim()).filter(tag => tag)
-        })
+        body: JSON.stringify(requestData)
       });
 
+      console.log('📤 Save response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('✅ Save successful:', data);
         toast.success('Code saved successfully!');
         setShowSaveModal(false);
         setSaveTitle('');
@@ -121,12 +132,18 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
         setSaveTags('');
         fetchCodeHistory(1); // Refresh list and reset to first page
       } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to save code');
+        const errorText = await response.text();
+        console.error('❌ Save failed:', response.status, errorText);
+        try {
+          const errorJson = JSON.parse(errorText);
+          toast.error(errorJson.error || 'Failed to save code');
+        } catch {
+          toast.error(`Server error: ${response.status}`);
+        }
       }
     } catch (error) {
-      console.error('Error saving code:', error);
-      toast.error('Failed to save code');
+      console.error('❌ Network error saving code:', error);
+      toast.error('Network error: Failed to save code');
     } finally {
       setSaving(false);
     }
