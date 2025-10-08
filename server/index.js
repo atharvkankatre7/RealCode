@@ -22,6 +22,7 @@ import User from './models/User.js';
 import userRoutes from "./routes/user.js"
 import codeHistoryRoutes from "./routes/codeHistory.js"
 import commentRoutes from "./routes/comments.js"
+import adminRoutes from "./routes/admin.js"
 
 // Load environment variables
 dotenv.config()
@@ -193,6 +194,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/code-history', codeHistoryRoutes)
 app.use('/api/comments', commentRoutes)
+app.use('/api/admin', adminRoutes)
 
 // Add HTTP fallback endpoint for joining rooms
 app.post('/api/join-room', (req, res) => {
