@@ -19,6 +19,9 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
   const [language, setLanguage] = useState<Language>("javascript");
   const [loaded, setLoaded] = useState(false);
   const { user } = useAuth();
+  
+  // Get API URL from environment
+  const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
 
   // Load language from backend on login/app load
   useEffect(() => {
@@ -30,7 +33,7 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
         return;
       }
       try {
-        const res = await fetch(`http://localhost:5002/api/user/preferences?email=${encodeURIComponent(email)}`);
+        const res = await fetch(`${API_URL}/api/user/preferences?email=${encodeURIComponent(email)}`);
         if (res.ok) {
           const data = await res.json();
           if (data.preferences && data.preferences.defaultLanguage) {
@@ -56,7 +59,7 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
     setLanguage(newLanguage);
     const email = user?.email;
     if (!email) return;
-    fetch("http://localhost:5002/api/user/preferences", {
+    fetch(`${API_URL}/api/user/preferences`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, preferences: { defaultLanguage: newLanguage } }),

@@ -46,6 +46,9 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
   const [limit] = useState(12);
   const [total, setTotal] = useState(0);
 
+// Get API URL from environment
+  const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
+
   // Fetch code history
   const fetchCodeHistory = async (pageArg?: number) => {
     if (!user?.email) return;
@@ -58,7 +61,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
       params.set('limit', String(limit));
       if (searchTerm.trim()) params.set('q', searchTerm.trim());
 
-      const response = await fetch(`http://localhost:5002/api/code-history/${encodeURIComponent(user.email)}?${params.toString()}`, {
+      const response = await fetch(`${API_URL}/api/code-history/${encodeURIComponent(user.email)}?${params.toString()}`, {
         headers: {
           'x-user-email': user.email
         }
@@ -93,7 +96,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
 
     setSaving(true);
     try {
-      const response = await fetch('http://localhost:5002/api/code-history/save', {
+      const response = await fetch(`${API_URL}/api/code-history/save`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -136,7 +139,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
     if (!confirm('Are you sure you want to delete this code file?')) return;
 
     try {
-      const response = await fetch(`http://localhost:5002/api/code-history/file/${fileId}`, {
+      const response = await fetch(`${API_URL}/api/code-history/file/${fileId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -199,7 +202,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
     toast.success(`Loaded ${file.title}`);
     // Update lastOpenedAt on server (non-blocking)
     if (user?.email) {
-      fetch(`http://localhost:5002/api/code-history/file/${file._id}`, {
+      fetch(`${API_URL}/api/code-history/file/${file._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -215,7 +218,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
   const toggleFavorite = async (file: CodeFile) => {
     if (!user?.email) return;
     try {
-      const res = await fetch(`http://localhost:5002/api/code-history/file/${file._id}`, {
+      const res = await fetch(`${API_URL}/api/code-history/file/${file._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -234,7 +237,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
     if (!user?.email) return;
     setExporting(true);
     try {
-      const res = await fetch(`http://localhost:5002/api/code-history/export/${encodeURIComponent(user.email)}`, {
+      const res = await fetch(`${API_URL}/api/code-history/export/${encodeURIComponent(user.email)}`, {
         headers: { 'x-user-email': user.email }
       });
       if (!res.ok) {
