@@ -37,8 +37,9 @@ const codeHistorySchema = new mongoose.Schema({
 // Compound index for efficient queries and maintaining order
 codeHistorySchema.index({ userId: 1, createdAt: -1 });
 codeHistorySchema.index({ language: 1, updatedAt: -1 });
-// Text index for quick search across fields with language override disabled
-codeHistorySchema.index({ title: 'text', description: 'text', tags: 'text' }, { default_language: 'none' });
+// Text index temporarily disabled to avoid language override issue
+// TODO: Re-enable after fixing existing index
+// codeHistorySchema.index({ title: 'text', description: 'text', tags: 'text' }, { default_language: 'none' });
 
 // Pre-save middleware to update the updatedAt field
 codeHistorySchema.pre('save', function(next) {
