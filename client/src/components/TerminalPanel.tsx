@@ -27,9 +27,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const wsRef = useRef<WebSocket | null>(null);
   const [isWaitingForInput, setIsWaitingForInput] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
   
   // Add mounted state to prevent operations after unmount
   const isMountedRef = useRef(true);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const keepAliveIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Check if container is ready before initializing terminal
@@ -107,23 +110,39 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       return;
     }
 
-    // WebSocket connection
-    const ws = new WebSocket(TERMINAL_WS_URL);
-    wsRef.current = ws;
+    // WebSocket connection with reconnection
+    const connectWebSocket = () => {
+      if (!isMountedRef.current) return;
+      
+      const ws = new WebSocket(TERMINAL_WS_URL);
+      wsRef.current = ws;
 
-    ws.onopen = () => {
-      if (!isMountedRef.current) return; // Skip if component is unmounted
-      try {
-        term.writeln("\x1b[1;36m╭─────────────────────────────────────────────╮\x1b[0m");
-        term.writeln("\x1b[1;36m│\x1b[0m \x1b[1;32m✓ Connected to RealCode Terminal Server\x1b[0m \x1b[1;36m│\x1b[0m");
-        term.writeln("\x1b[1;36m│\x1b[0m \x1b[1;33mType 'help' for available commands\x1b[0m \x1b[1;36m│\x1b[0m");
-        term.writeln("\x1b[1;36m╰─────────────────────────────────────────────╯\x1b[0m");
-        term.writeln("");
-        term.writeln("\x1b[1;34m$\x1b[0m \x1b[1;37mReady to execute code...\x1b[0m");
-      } catch (error) {
-        console.warn('[Terminal] Failed to write connection message:', error);
-      }
+      ws.onopen = () => {
+        if (!isMountedRef.current) return;
+        setIsConnected(true);
+        
+        // Clear any existing reconnect timeout
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
+        
+        try {
+          term.writeln("\x1b[1;36m╭─────────────────────────────────────────────╮\x1b[0m");
+          term.writeln("\x1b[1;36m│\x1b[0m \x1b[1;32m✓ Connected to RealCode Terminal Server\x1b[0m \x1b[1;36m│\x1b[0m");
+          term.writeln("\x1b[1;36m│\x1b[0m \x1b[1;33mType 'help' for available commands\x1b[0m \x1b[1;36m│\x1b[0m");
+          term.writeln("\x1b[1;36m╰─────────────────────────────────────────────╯\x1b[0m");
+          term.writeln("");
+          term.writeln("\x1b[1;34m$\x1b[0m \x1b[1;37mReady to execute code...\x1b[0m");
+        } catch (error) {
+          console.warn('[Terminal] Failed to write connection message:', error);
+        }
+      };
+
+      return ws;
     };
+    
+    const ws = connectWebSocket();
     ws.onmessage = (event) => {
       if (!isMountedRef.current) return; // Skip if component is unmounted
       try {
@@ -184,24 +203,42 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         }
       }
     };
-    ws.onclose = () => {
-      if (!isMountedRef.current) return; // Skip if component is unmounted
-      try {
-        term.writeln("\r\n\x1b[1;31m[Disconnected]\x1b[0m");
-      } catch (error) {
-        console.warn('[Terminal] Failed to write disconnection message:', error);
-      }
+    // Add reconnection logic to WebSocket
+    const setupWebSocketHandlers = (ws: WebSocket) => {
+      ws.onclose = () => {
+        if (!isMountedRef.current) return;
+        setIsConnected(false);
+        
+        try {
+          term.writeln("\r\n\x1b[1;31m[Disconnected - Attempting to reconnect...]\x1b[0m");
+        } catch (error) {
+          console.warn('[Terminal] Failed to write disconnection message:', error);
+        }
+        
+        // Attempt to reconnect after 3 seconds
+        if (!reconnectTimeoutRef.current) {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (isMountedRef.current) {
+              console.log('[Terminal] Attempting to reconnect...');
+              const newWs = connectWebSocket();
+              if (newWs) {
+                setupWebSocketHandlers(newWs);
+              }
+            }
+          }, 3000);
+        }
+      };
+      
+      ws.onerror = (error) => {
+        console.warn('[Terminal] WebSocket error:', error);
+        if (!isMountedRef.current) return;
+        setIsConnected(false);
+      };
     };
-    ws.onerror = (error) => {
-      console.warn('[Terminal] WebSocket connection failed - Terminal may be disabled in production:', error);
-      if (!isMountedRef.current) return; // Skip if component is unmounted
-      try {
-        term.writeln("\r\n\x1b[1;33m[Terminal unavailable in production]\x1b[0m");
-        term.writeln("\x1b[1;37mTerminal features are disabled for security reasons.\x1b[0m");
-      } catch (error) {
-        console.warn('[Terminal] Failed to write error message:', error);
-      }
-    };
+    
+    if (ws) {
+      setupWebSocketHandlers(ws);
+    }
 
     // Send terminal input to backend
     term.onData((data) => {
@@ -295,6 +332,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       isMountedRef.current = false;
       window.removeEventListener("resize", handleResize);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      
+      // Clean up timers
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (keepAliveIntervalRef.current) {
+        clearInterval(keepAliveIntervalRef.current);
+        keepAliveIntervalRef.current = null;
+      }
       
       // Disconnect ResizeObserver
       if (resizeObserver) {
@@ -396,7 +443,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     <div className={`${className}`}>
       {/* Terminal Header with Controls */}
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-medium text-slate-300">Terminal Output</h4>
+        <div className="flex items-center gap-2">
+          <h4 className="text-sm font-medium text-slate-300">Terminal Output</h4>
+          {/* Connection Status Indicator */}
+          <div className="flex items-center gap-1">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'} ${isConnected ? 'animate-pulse' : ''}`}></div>
+            <span className={`text-xs ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </span>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           {/* Clear Terminal Button */}
           <button

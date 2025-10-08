@@ -534,6 +534,7 @@ terminalWss.on("connection", (ws) => {
   let ptyProcess = null;
   let currentProcess = null; // Track the current running process
   let processTimeout = null; // Track process timeout
+  let keepAliveInterval = null; // Track keep-alive interval
   
   try {
     ptyProcess = pty.spawn(shell, [], {
@@ -558,6 +559,20 @@ terminalWss.on("connection", (ws) => {
   // Handle PTY process exit with .once() to prevent multiple listeners
   ptyProcess.once('exit', (code, signal) => {
     console.log(`PTY process exited with code ${code} and signal ${signal}`);
+  });
+
+  // Set up keep-alive ping to prevent connection timeout
+  keepAliveInterval = setInterval(() => {
+    if (ws.readyState === ws.OPEN) {
+      ws.ping();
+    } else {
+      clearInterval(keepAliveInterval);
+    }
+  }, 30000); // Send ping every 30 seconds
+
+  // Handle pong response
+  ws.on('pong', () => {
+    console.log('🏓 Terminal WebSocket pong received');
   });
 
   ptyProcess.on("data", (data) => {
@@ -944,6 +959,10 @@ terminalWss.on("connection", (ws) => {
   ws.on("close", () => {
     console.log("❌ Client disconnected from terminal");
     try {
+      if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+        keepAliveInterval = null;
+      }
       if (processTimeout) {
         clearTimeout(processTimeout);
         processTimeout = null;
@@ -971,6 +990,10 @@ terminalWss.on("connection", (ws) => {
   ws.on("error", (err) => {
     console.error("WebSocket error:", err.message);
     try {
+      if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+        keepAliveInterval = null;
+      }
       if (processTimeout) {
         clearTimeout(processTimeout);
         processTimeout = null;
