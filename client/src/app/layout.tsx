@@ -51,7 +51,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     message.includes('data-new-gr-c-s-check-loaded') ||
                     message.includes('data-gr-ext-installed') ||
                     message.includes('message channel closed') ||
-                    message.includes('asynchronous response')
+                    message.includes('asynchronous response') ||
+                    message.includes('A listener indicated an asynchronous response by returning true') ||
+                    message.includes('chrome-extension://') ||
+                    message.includes('moz-extension://') ||
+                    message.includes('Extension context invalidated')
                   ) {
                     return;
                   }
@@ -72,6 +76,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   }
                   originalWarn.apply(console, args);
                 };
+                
+                // Suppress unhandled promise rejections from extensions
+                window.addEventListener('unhandledrejection', function(event) {
+                  const reason = event.reason?.toString() || '';
+                  if (
+                    reason.includes('message channel closed') ||
+                    reason.includes('listener indicated an asynchronous response') ||
+                    reason.includes('A listener indicated an asynchronous response by returning true') ||
+                    reason.includes('chrome-extension://') ||
+                    reason.includes('moz-extension://') ||
+                    reason.includes('Extension context invalidated')
+                  ) {
+                    event.preventDefault();
+                    return;
+                  }
+                });
               })();
             `,
           }}
