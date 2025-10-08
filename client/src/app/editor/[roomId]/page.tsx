@@ -1012,7 +1012,7 @@ return (
             isOpen={showHistory}
             onClose={() => setShowHistory(false)}
             onLoadCode={handleLoadCode}
-            currentCode={editorRef.current?.getValue() || ""}
+            getCurrentCode={() => editorRef.current?.getValue() || ""}
             currentLanguage={language}
         />
     </EditPermissionProvider>

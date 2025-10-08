@@ -20,7 +20,7 @@ interface CodeHistoryPanelProps {
   isOpen: boolean;
   onClose: () => void;
   onLoadCode: (code: string, language: string) => void;
-  currentCode: string;
+  getCurrentCode: () => string;
   currentLanguage: string;
 }
 
@@ -28,7 +28,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
   isOpen,
   onClose,
   onLoadCode,
-  currentCode,
+  getCurrentCode,
   currentLanguage
 }) => {
   const { user } = useAuth();
@@ -82,6 +82,8 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
 
   // Save current code
   const saveCurrentCode = async () => {
+    const currentCode = getCurrentCode();
+    
     if (!user?.email || !currentCode.trim()) {
       toast.error('No code to save');
       return;
@@ -500,6 +502,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
             <h3 className="text-lg font-bold text-white mb-2">Save Code to History</h3>
             <div className="mb-4 text-sm">
               {(() => {
+                const currentCode = getCurrentCode();
                 const bytes = new Blob([currentCode || '']).size;
                 const kb = Math.ceil(bytes / 1024);
                 const over = bytes > 200000;
@@ -563,7 +566,7 @@ const CodeHistoryPanel: React.FC<CodeHistoryPanelProps> = ({
               <button
                 onClick={saveCurrentCode}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors disabled:opacity-50"
-                disabled={saving || !saveTitle.trim() || new Blob([currentCode || '']).size > 200000}
+                disabled={saving || !saveTitle.trim() || new Blob([getCurrentCode() || '']).size > 200000}
               >
                 {saving ? 'Saving...' : 'Save Code'}
               </button>
