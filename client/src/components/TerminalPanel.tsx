@@ -119,6 +119,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
       ws.onopen = () => {
         if (!isMountedRef.current) return;
+        console.log('[Terminal] WebSocket connected, updating state');
         setIsConnected(true);
         
         // Clear any existing reconnect timeout
@@ -207,6 +208,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     const setupWebSocketHandlers = (ws: WebSocket) => {
       ws.onclose = () => {
         if (!isMountedRef.current) return;
+        console.log('[Terminal] WebSocket disconnected, updating state');
         setIsConnected(false);
         
         try {
@@ -232,6 +234,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       ws.onerror = (error) => {
         console.warn('[Terminal] WebSocket error:', error);
         if (!isMountedRef.current) return;
+        console.log('[Terminal] WebSocket error, updating state to disconnected');
         setIsConnected(false);
       };
     };
@@ -451,6 +454,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
             <span className={`text-xs ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
               {isConnected ? 'Connected' : 'Disconnected'}
             </span>
+            <span className="text-xs text-gray-500">({String(isConnected)})</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
