@@ -49,7 +49,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     message.includes('hydration') || 
                     message.includes('mismatch') ||
                     message.includes('data-new-gr-c-s-check-loaded') ||
-                    message.includes('data-gr-ext-installed')
+                    message.includes('data-gr-ext-installed') ||
+                    message.includes('message channel closed') ||
+                    message.includes('asynchronous response')
                   ) {
                     return;
                   }
@@ -62,7 +64,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     message.includes('hydration') || 
                     message.includes('mismatch') ||
                     message.includes('data-new-gr-c-s-check-loaded') ||
-                    message.includes('data-gr-ext-installed')
+                    message.includes('data-gr-ext-installed') ||
+                    message.includes('message channel closed') ||
+                    message.includes('asynchronous response')
                   ) {
                     return;
                   }

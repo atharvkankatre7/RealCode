@@ -95,9 +95,17 @@ const RoomForm = () => {
       const roomIdToCreate = createRoomId.trim() || Math.random().toString(36).substring(2, 11)
       console.log("Creating room with ID:", roomIdToCreate)
 
-      // Make sure socket is connected (wait for connect event, not timeout)
+      // Make sure socket is connected (with timeout)
       if (!socketService.isConnected()) {
-        await new Promise<void>(resolve => socketService.onConnect(() => resolve()))
+        await Promise.race([
+          new Promise<void>(resolve => {
+            socketService.connect();
+            socketService.onConnect(() => resolve());
+          }),
+          new Promise<void>((_, reject) => {
+            setTimeout(() => reject(new Error('Socket connection timeout')), 10000);
+          })
+        ]);
       }
 
       const { roomId: createdRoomId } = await socketService.createRoom(createUsername, roomIdToCreate)
@@ -127,7 +135,15 @@ const RoomForm = () => {
       const roomIdToJoin = joinRoomId.trim()
       console.log("Joining room:", roomIdToJoin)
       if (!socketService.isConnected()) {
-        await new Promise<void>(resolve => socketService.onConnect(() => resolve()))
+        await Promise.race([
+          new Promise<void>(resolve => {
+            socketService.connect();
+            socketService.onConnect(() => resolve());
+          }),
+          new Promise<void>((_, reject) => {
+            setTimeout(() => reject(new Error('Socket connection timeout')), 10000);
+          })
+        ]);
       }
 
       const response = await socketService.validateRoom(roomIdToJoin)

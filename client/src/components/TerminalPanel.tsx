@@ -192,10 +192,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         console.warn('[Terminal] Failed to write disconnection message:', error);
       }
     };
-    ws.onerror = () => {
+    ws.onerror = (error) => {
+      console.warn('[Terminal] WebSocket connection failed - Terminal may be disabled in production:', error);
       if (!isMountedRef.current) return; // Skip if component is unmounted
       try {
-        term.writeln("\r\n\x1b[1;31m[WebSocket error]\x1b[0m");
+        term.writeln("\r\n\x1b[1;33m[Terminal unavailable in production]\x1b[0m");
+        term.writeln("\x1b[1;37mTerminal features are disabled for security reasons.\x1b[0m");
       } catch (error) {
         console.warn('[Terminal] Failed to write error message:', error);
       }
