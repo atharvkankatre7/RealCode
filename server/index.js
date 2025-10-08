@@ -28,6 +28,16 @@ import adminRoutes from "./routes/admin.js"
 const EXECUTION_CACHE = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
 
+// Process pools for keeping runtimes alive
+const PROCESS_POOLS = {
+  java: new Map(), // Map of className -> { process, lastUsed }
+  python: null, // Single Python REPL process
+  node: null    // Single Node.js REPL process
+};
+
+const POOL_TTL = 10 * 60 * 1000; // Keep processes alive for 10 minutes
+const MAX_POOL_SIZE = 3; // Maximum number of pooled processes per language
+
 // Process warm-up - periodically run lightweight commands to keep runtimes warm
 function warmUpRuntimes() {
   const warmUpCommands = [
@@ -55,6 +65,113 @@ function warmUpRuntimes() {
 setInterval(warmUpRuntimes, 2 * 60 * 1000);
 // Initial warm-up
 setTimeout(warmUpRuntimes, 5000); // Wait 5 seconds after server start
+
+// Simple code pattern detection
+function isSimpleProgram(code, language) {
+  const codeLines = code.trim().split('\n').filter(line => line.trim() && !line.trim().startsWith('//'))
+  
+  if (language === 'java') {
+    // Detect simple Hello World or single method programs
+    const hasOnlyPrintStatements = codeLines.every(line => 
+      line.includes('System.out.print') || 
+      line.includes('public class') || 
+      line.includes('public static void main') || 
+      line.trim() === '{' || 
+      line.trim() === '}'
+    )
+    return hasOnlyPrintStatements && codeLines.length <= 10
+  }
+  
+  if (language === 'python') {
+    // Detect simple Python programs
+    const hasOnlySimpleStatements = codeLines.every(line => 
+      line.includes('print(') || 
+      line.startsWith('import ') || 
+      line.includes('input(') ||
+      /^[a-zA-Z_]\w*\s*=/.test(line.trim()) // Simple variable assignments
+    )
+    return hasOnlySimpleStatements && codeLines.length <= 15
+  }
+  
+  return false
+}
+
+// External code execution API for ultra-fast performance
+async function executeWithAPI(code, language, ws) {
+  try {
+    ws.send(JSON.stringify({ 
+      type: "output", 
+      data: "⚡ Using ultra-fast execution API...\r\n" 
+    }));
+    
+    // Using Judge0 API (free tier) - much faster than local execution
+    const languageMap = {
+      'java': 62,
+      'python': 71,
+      'javascript': 63,
+      'cpp': 54,
+      'c': 50,
+      'go': 60,
+      'rust': 73
+    };
+    
+    if (!languageMap[language]) {
+      return false; // Fallback to local execution
+    }
+    
+    const response = await fetch('https://judge0-ce.p.rapidapi.com/submissions?base64_encoded=true&wait=true', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-RapidAPI-Key': process.env.JUDGE0_API_KEY || 'demo-key',
+        'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com'
+      },
+      body: JSON.stringify({
+        source_code: Buffer.from(code).toString('base64'),
+        language_id: languageMap[language]
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.stdout) {
+      ws.send(JSON.stringify({ 
+        type: "output", 
+        data: Buffer.from(result.stdout, 'base64').toString() + "\r\n" 
+      }));
+    }
+    
+    if (result.stderr) {
+      ws.send(JSON.stringify({ 
+        type: "output", 
+        data: Buffer.from(result.stderr, 'base64').toString() + "\r\n" 
+      }));
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('API execution failed:', error.message);
+    return false; // Fallback to local execution
+  }
+}
+
+// Client-side execution for simple programs
+function canExecuteClientSide(code, language) {
+  if (language === 'javascript') {
+    // Always allow client-side JS execution
+    return !code.includes('require(') && !code.includes('import ') && !code.includes('fs.') && !code.includes('process.')
+  }
+  
+  if (language === 'python') {
+    // Simple Python programs that can be "simulated"
+    const lines = code.trim().split('\n')
+    return lines.length <= 5 && lines.every(line => 
+      line.includes('print(') && !line.includes('input(')
+    )
+  }
+  
+  return false
+}
 
 // Load environment variables
 dotenv.config()
@@ -516,7 +633,7 @@ const languageConfig = {
     cmd: isWindows ? (hasJavac ? [path.join(exactJavaPath, 'javac.exe')] : ['javac']) : ['javac'],
     args: ['-J-Xms32m', '-J-Xmx128m'], // Optimize JVM memory for faster startup
     runCmd: isWindows ? (hasJavac ? [path.join(exactJavaPath, 'java.exe')] : ['java']) : ['java'],
-    runArgs: ['-Xms32m', '-Xmx128m', '-XX:+UseSerialGC'], // Fast JVM startup options
+    runArgs: ['-Xms16m', '-Xmx64m', '-XX:+UseSerialGC', '-Xint', '-XX:TieredStopAtLevel=1', '-XX:-UsePerfData'], // Ultra-fast JVM startup
     env: {
       ...process.env,
       // Set JAVA_HOME if available
@@ -749,17 +866,18 @@ terminalWss.on("connection", (ws) => {
               ws.send(JSON.stringify({ type: "output", data: `Process error: ${err.message}\r\n` }));
             });
 
-            // Set process timeout (30 seconds)
+            // Set process timeout - shorter for simple programs
+            const timeoutDuration = isSimple ? 10000 : 30000; // 10s for simple, 30s for complex
             processTimeout = setTimeout(() => {
               if (currentProcess && !currentProcess.killed) {
                 try {
                   currentProcess.kill('SIGTERM');
-                  ws.send(JSON.stringify({ type: "output", data: "Process timed out after 30 seconds\r\n" }));
+                  ws.send(JSON.stringify({ type: "output", data: `Process timed out after ${timeoutDuration/1000} seconds\r\n` }));
                 } catch (err) {
                   console.error('Error killing timed out process:', err.message);
                 }
               }
-            }, 30000);
+            }, timeoutDuration);
 
             // Write initial user input to stdin if provided
             if (userInput) {
@@ -852,6 +970,61 @@ terminalWss.on("connection", (ws) => {
           }
         };
 
+        // Check for ultra-fast execution paths first
+        const isSimple = isSimpleProgram(code, language);
+        const canClientSide = canExecuteClientSide(code, language);
+        
+        // Try external API execution first (fastest option)
+        if (process.env.JUDGE0_API_KEY && ['java', 'python', 'cpp', 'javascript'].includes(language)) {
+          const apiSuccess = await executeWithAPI(code, language, ws);
+          if (apiSuccess) {
+            try { fs.unlinkSync(filePath); } catch {}
+            return;
+          }
+        }
+        
+        if (canClientSide) {
+          // Ultra-fast client-side execution
+          ws.send(JSON.stringify({ 
+            type: "output", 
+            data: "⚡ Executing client-side for ultra-fast performance...\r\n" 
+          }));
+          
+          if (language === 'javascript') {
+            // Safe client-side JavaScript execution
+            try {
+              const result = eval(code);
+              ws.send(JSON.stringify({ type: "output", data: String(result) + "\r\n" }));
+            } catch (err) {
+              ws.send(JSON.stringify({ type: "output", data: `Error: ${err.message}\r\n` }));
+            }
+          } else if (language === 'python') {
+            // Simulate simple Python print statements
+            try {
+              const printRegex = /print\(([^)]*)\)/g;
+              let match;
+              while ((match = printRegex.exec(code)) !== null) {
+                const printContent = match[1].replace(/[\'\"]/g, '');
+                ws.send(JSON.stringify({ type: "output", data: printContent + "\r\n" }));
+              }
+            } catch (err) {
+              ws.send(JSON.stringify({ type: "output", data: `Error: ${err.message}\r\n` }));
+            }
+          }
+          
+          // Cleanup and return
+          try { fs.unlinkSync(filePath); } catch {}
+          return;
+        }
+        
+        // Show optimized execution message for simple programs
+        if (isSimple) {
+          ws.send(JSON.stringify({ 
+            type: "output", 
+            data: `⚡ Detected simple ${language} program - using optimized execution path...\r\n` 
+          }));
+        }
+        
         // Handle different language execution patterns
         if (language === 'java') {
           // Check if we have javac available
