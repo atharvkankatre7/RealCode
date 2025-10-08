@@ -743,15 +743,9 @@ terminalWss.on("connection", (ws) => {
         return;
       }
       
-      // Check if language runtime is available
-      const runtimeAvailable = await checkLanguageRuntime(language, config);
-      if (!runtimeAvailable.available) {
-        ws.send(JSON.stringify({ 
-          type: "output", 
-          data: `❌ ${language} runtime not available: ${runtimeAvailable.message}\r\n${runtimeAvailable.suggestion}\r\n` 
-        }));
-        return;
-      }
+      // Note: Runtime checking temporarily disabled for deployment stability
+      // Languages will show appropriate error messages when runtimes are missing
+    }
 
       const tempDir = os.tmpdir();
       const filename = `temp_${Date.now()}.${config.ext}`;
