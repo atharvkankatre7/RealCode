@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: false,
   // Add external packages for better WebSocket support
   serverExternalPackages: ['socket.io-client'],
+  // Force production backend URL
+  env: {
+    NEXT_PUBLIC_BACKEND_URL: 'https://realcode.onrender.com',
+    NEXT_PUBLIC_TERMINAL_WS_URL: 'wss://realcode.onrender.com/terminal',
+  },
   // Disable ESLint during build for faster deployment
   eslint: {
     ignoreDuringBuilds: true,
