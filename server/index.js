@@ -530,99 +530,7 @@ const languageConfig = {
   }
 };
 
-// Function to check if a language runtime is available
-async function checkLanguageRuntime(language, config) {
-  const { spawn } = await import('child_process');
-  
-  return new Promise((resolve) => {
-    let checkCmd;
-    let checkArgs;
-    let errorMessage;
-    let suggestion;
-    
-    switch (language) {
-      case 'python':
-        checkCmd = 'python3';
-        checkArgs = ['--version'];
-        errorMessage = 'Python 3 is not installed';
-        suggestion = 'Install Python: https://python.org/downloads or use Docker with Python runtime';
-        break;
-      case 'java':
-        checkCmd = isWindows ? 'javac' : 'javac';
-        checkArgs = ['-version'];
-        errorMessage = 'Java JDK is not installed';
-        suggestion = 'Install OpenJDK: https://adoptium.net or use Docker with Java runtime';
-        break;
-      case 'go':
-        checkCmd = 'go';
-        checkArgs = ['version'];
-        errorMessage = 'Go is not installed';
-        suggestion = 'Install Go: https://golang.org/dl or use Docker with Go runtime';
-        break;
-      case 'rust':
-        checkCmd = 'rustc';
-        checkArgs = ['--version'];
-        errorMessage = 'Rust is not installed';
-        suggestion = 'Install Rust: https://rustup.rs or use Docker with Rust runtime';
-        break;
-      case 'ruby':
-        checkCmd = 'ruby';
-        checkArgs = ['--version'];
-        errorMessage = 'Ruby is not installed';
-        suggestion = 'Install Ruby: https://ruby-lang.org or use Docker with Ruby runtime';
-        break;
-      case 'csharp':
-        checkCmd = 'dotnet';
-        checkArgs = ['--version'];
-        errorMessage = '.NET Core is not installed';
-        suggestion = 'Install .NET: https://dotnet.microsoft.com/download or use Docker with .NET runtime';
-        break;
-      case 'cpp':
-        checkCmd = 'g++';
-        checkArgs = ['--version'];
-        errorMessage = 'GCC/G++ compiler is not installed';
-        suggestion = 'Install build tools or use Docker with C++ compiler';
-        break;
-      case 'javascript':
-      case 'typescript':
-        // These should always be available with Node.js
-        resolve({ available: true });
-        return;
-      default:
-        resolve({ available: false, message: 'Unknown language', suggestion: 'Use JavaScript or TypeScript' });
-        return;
-    }
-    
-    const testProcess = spawn(checkCmd, checkArgs, { stdio: 'pipe' });
-    
-    let timeout = setTimeout(() => {
-      testProcess.kill();
-      resolve({ 
-        available: false, 
-        message: `${errorMessage} (command timeout)`, 
-        suggestion 
-      });
-    }, 5000);
-    
-    testProcess.on('close', (code) => {
-      clearTimeout(timeout);
-      resolve({ 
-        available: code === 0, 
-        message: code === 0 ? 'Runtime available' : errorMessage,
-        suggestion: code === 0 ? '' : suggestion
-      });
-    });
-    
-    testProcess.on('error', (err) => {
-      clearTimeout(timeout);
-      resolve({ 
-        available: false, 
-        message: `${errorMessage} (${err.message})`,
-        suggestion
-      });
-    });
-  });
-}
+// Runtime checking temporarily removed for deployment stability
 
 terminalWss.on("connection", (ws) => {
   console.log("🔌 Client connected to terminal");
@@ -745,7 +653,6 @@ terminalWss.on("connection", (ws) => {
       
       // Note: Runtime checking temporarily disabled for deployment stability
       // Languages will show appropriate error messages when runtimes are missing
-    }
 
       const tempDir = os.tmpdir();
       const filename = `temp_${Date.now()}.${config.ext}`;
