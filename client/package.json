@@ -1,5 +1,6 @@
 {
-  "name": "client",
+  "name": "realcode-client",
+  "// Updated backend URL": "2025-01-08",
   "version": "0.1.0",
   "private": true,
   "scripts": {
