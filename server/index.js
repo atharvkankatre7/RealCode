@@ -453,6 +453,8 @@ if (hasExactJava) {
 }
 
 // Language execution configuration with spawn support
+// Auto-detect OS and use appropriate commands
+const isWindows = os.platform() === 'win32';
 const languageConfig = {
   javascript: {
     ext: 'js',
@@ -470,38 +472,39 @@ const languageConfig = {
   },
   python: {
     ext: 'py',
-    cmd: ['python'],
+    cmd: ['python3'],
     args: [],
-    runCmd: ['python'],
-    runArgs: []
+    runCmd: ['python3'],
+    runArgs: [],
+    fallbackCmd: ['python'] // Fallback for systems where python3 is not available
   },
   java: {
     ext: 'java',
-    cmd: hasJavac ? [path.join(exactJavaPath, 'javac.exe')] : null,
+    cmd: isWindows ? (hasJavac ? [path.join(exactJavaPath, 'javac.exe')] : ['javac']) : ['javac'],
     args: [],
-    runCmd: hasJavac ? [path.join(exactJavaPath, 'java.exe')] : ['java'],
+    runCmd: isWindows ? (hasJavac ? [path.join(exactJavaPath, 'java.exe')] : ['java']) : ['java'],
     runArgs: [],
-    // Add Java-specific environment configuration
     env: {
       ...process.env,
-      // Use detected Java paths or fallback to common paths
-      PATH: process.env.PATH + javaPathString
+      // Set JAVA_HOME if available
+      ...(process.env.JAVA_HOME ? {} : { JAVA_HOME: '/usr/lib/jvm/java-17-openjdk-amd64' }),
+      PATH: process.env.PATH + (isWindows ? javaPathString : '')
     },
-    // Flag to indicate if compilation is available
-    canCompile: hasJavac
+    canCompile: isWindows ? hasJavac : true // Assume javac is available on Linux
   },
   csharp: {
     ext: 'cs',
-    cmd: ['dotnet'],
-    args: ['run'],
+    cmd: ['dotnet', 'new', 'console', '--force'],
+    args: [],
     runCmd: ['dotnet'],
-    runArgs: ['run']
+    runArgs: ['run'],
+    requiresProject: true // C# needs a project structure
   },
   cpp: {
     ext: 'cpp',
     cmd: ['g++'],
-    args: ['-o', 'a.out'],
-    runCmd: ['./a.out'],
+    args: ['-o', isWindows ? 'a.exe' : 'a.out'],
+    runCmd: [isWindows ? './a.exe' : './a.out'],
     runArgs: []
   },
   ruby: {
@@ -521,11 +524,105 @@ const languageConfig = {
   rust: {
     ext: 'rs',
     cmd: ['rustc'],
-    args: ['-o', 'temp'],
-    runCmd: ['./temp'],
+    args: ['-o', isWindows ? 'temp.exe' : 'temp'],
+    runCmd: [isWindows ? './temp.exe' : './temp'],
     runArgs: []
   }
 };
+
+// Function to check if a language runtime is available
+async function checkLanguageRuntime(language, config) {
+  const { spawn } = await import('child_process');
+  
+  return new Promise((resolve) => {
+    let checkCmd;
+    let checkArgs;
+    let errorMessage;
+    let suggestion;
+    
+    switch (language) {
+      case 'python':
+        checkCmd = 'python3';
+        checkArgs = ['--version'];
+        errorMessage = 'Python 3 is not installed';
+        suggestion = 'Install Python: https://python.org/downloads or use Docker with Python runtime';
+        break;
+      case 'java':
+        checkCmd = isWindows ? 'javac' : 'javac';
+        checkArgs = ['-version'];
+        errorMessage = 'Java JDK is not installed';
+        suggestion = 'Install OpenJDK: https://adoptium.net or use Docker with Java runtime';
+        break;
+      case 'go':
+        checkCmd = 'go';
+        checkArgs = ['version'];
+        errorMessage = 'Go is not installed';
+        suggestion = 'Install Go: https://golang.org/dl or use Docker with Go runtime';
+        break;
+      case 'rust':
+        checkCmd = 'rustc';
+        checkArgs = ['--version'];
+        errorMessage = 'Rust is not installed';
+        suggestion = 'Install Rust: https://rustup.rs or use Docker with Rust runtime';
+        break;
+      case 'ruby':
+        checkCmd = 'ruby';
+        checkArgs = ['--version'];
+        errorMessage = 'Ruby is not installed';
+        suggestion = 'Install Ruby: https://ruby-lang.org or use Docker with Ruby runtime';
+        break;
+      case 'csharp':
+        checkCmd = 'dotnet';
+        checkArgs = ['--version'];
+        errorMessage = '.NET Core is not installed';
+        suggestion = 'Install .NET: https://dotnet.microsoft.com/download or use Docker with .NET runtime';
+        break;
+      case 'cpp':
+        checkCmd = 'g++';
+        checkArgs = ['--version'];
+        errorMessage = 'GCC/G++ compiler is not installed';
+        suggestion = 'Install build tools or use Docker with C++ compiler';
+        break;
+      case 'javascript':
+      case 'typescript':
+        // These should always be available with Node.js
+        resolve({ available: true });
+        return;
+      default:
+        resolve({ available: false, message: 'Unknown language', suggestion: 'Use JavaScript or TypeScript' });
+        return;
+    }
+    
+    const testProcess = spawn(checkCmd, checkArgs, { stdio: 'pipe' });
+    
+    let timeout = setTimeout(() => {
+      testProcess.kill();
+      resolve({ 
+        available: false, 
+        message: `${errorMessage} (command timeout)`, 
+        suggestion 
+      });
+    }, 5000);
+    
+    testProcess.on('close', (code) => {
+      clearTimeout(timeout);
+      resolve({ 
+        available: code === 0, 
+        message: code === 0 ? 'Runtime available' : errorMessage,
+        suggestion: code === 0 ? '' : suggestion
+      });
+    });
+    
+    testProcess.on('error', (err) => {
+      clearTimeout(timeout);
+      resolve({ 
+        available: false, 
+        message: `${errorMessage} (${err.message})`,
+        suggestion
+      });
+    });
+  });
+}
 
 terminalWss.on("connection", (ws) => {
   console.log("🔌 Client connected to terminal");
@@ -643,6 +740,16 @@ terminalWss.on("connection", (ws) => {
       const config = languageConfig[language];
       if (!config) {
         ws.send(JSON.stringify({ type: "output", data: `Error: Unsupported language '${language}'\r\n` }));
+        return;
+      }
+      
+      // Check if language runtime is available
+      const runtimeAvailable = await checkLanguageRuntime(language, config);
+      if (!runtimeAvailable.available) {
+        ws.send(JSON.stringify({ 
+          type: "output", 
+          data: `❌ ${language} runtime not available: ${runtimeAvailable.message}\r\n${runtimeAvailable.suggestion}\r\n` 
+        }));
         return;
       }
 
