@@ -760,7 +760,7 @@ terminalWss.on("connection", (ws) => {
     }
   });
 
-  ws.on("message", (msg) => {
+  ws.on("message", async (msg) => {
     let parsed;
     try {
       parsed = JSON.parse(msg);
