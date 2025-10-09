@@ -375,7 +375,7 @@ export const registerRoomHandlers = (io, socket) => {
   });
 
   // Update the join-room handler to validate room existence
-  socket.on("join-room", ({ roomId, username, userId }, callback) => {
+  socket.on("join-room", async ({ roomId, username, userId }, callback) => {
     if (!roomId) {
       return callback({ error: "Room ID is required" });
     }
@@ -892,7 +892,7 @@ export const registerRoomHandlers = (io, socket) => {
   });
 
   // Handle user disconnect
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     const roomId = socket.currentRoomId;
     if (roomId) {
       const room = getRoom(roomId);
