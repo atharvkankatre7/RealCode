@@ -1009,7 +1009,7 @@ terminalWss.on("connection", (ws) => {
             } catch (err) {
               ws.send(JSON.stringify({ type: "output", data: `Error: ${err.message}\r\n` }));
             }
-          }
+          } else if (language === 'python') {
             // Simulate simple Python print statements
             try {
               const printRegex = /print\(([^)]*)\)/g;
