@@ -18,11 +18,13 @@ import fs from "fs";
 import path from "path";
 import connectDB from "./config/database.js";
 import autoSaveService from "./services/autoSaveService.js";
+import roomCleanupService from "./services/roomCleanupService.js";
 import User from './models/User.js';
 import userRoutes from "./routes/user.js"
 import codeHistoryRoutes from "./routes/codeHistory.js"
 import commentRoutes from "./routes/comments.js"
 import adminRoutes from "./routes/admin.js"
+import roomManagementRoutes from "./routes/roomManagement.js"
 
 // Performance optimizations
 const EXECUTION_CACHE = new Map();
@@ -190,10 +192,15 @@ connectDB().then(() => {
   console.log('✅ Database connected successfully');
   autoSaveService.setConnectionStatus(true);
   console.log('✅ Auto-save service initialized with database connection');
+  
+  // Start room cleanup service after database is connected
+  roomCleanupService.start();
+  console.log('✅ Room cleanup service initialized');
 }).catch((error) => {
   console.error('❌ Database connection failed:', error.message);
   autoSaveService.setConnectionStatus(false);
   console.log('⚠️  Auto-save service running without database - some features will be limited');
+  console.log('⚠️  Room cleanup service disabled due to database connection failure');
 });
 
 console.log('📦 Creating Express app...');
@@ -341,6 +348,7 @@ app.use('/api/users', userRoutes)
 app.use('/api/code-history', codeHistoryRoutes)
 app.use('/api/comments', commentRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/room-management', roomManagementRoutes)
 
 // Add HTTP fallback endpoint for joining rooms
 app.post('/api/join-room', (req, res) => {

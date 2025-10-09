@@ -27,6 +27,14 @@ const roomSchema = new mongoose.Schema({
     type: Boolean, 
     default: true 
   },
+  lastActivity: {
+    type: Date,
+    default: Date.now
+  },
+  inactiveCleanupAt: {
+    type: Date,
+    default: null  // Set when room becomes empty, cleared when users rejoin
+  },
   settings: {
     canEdit: { 
       type: Boolean, 
@@ -228,4 +236,68 @@ roomSchema.methods.updateParticipantActivity = async function(userId) {
   }
 };
 
-export default mongoose.model('Room', roomSchema); 
+// Method to update room activity
+roomSchema.methods.updateActivity = async function() {
+  try {
+    this.lastActivity = new Date();
+    this.inactiveCleanupAt = null; // Clear cleanup timer when activity occurs
+    await this.save();
+    console.log(`🔄 Updated activity for room ${this.roomId}`);
+    return this;
+  } catch (error) {
+    console.error(`❌ Error updating activity for room ${this.roomId}:`, error);
+    throw error;
+  }
+};
+
+// Method to mark room for cleanup (when it becomes empty)
+roomSchema.methods.scheduleCleanup = async function(cleanupDelayHours = 24) {
+  try {
+    const cleanupTime = new Date();
+    cleanupTime.setHours(cleanupTime.getHours() + cleanupDelayHours);
+    
+    this.inactiveCleanupAt = cleanupTime;
+    await this.save();
+    console.log(`⏰ Scheduled cleanup for room ${this.roomId} at ${cleanupTime}`);
+    return this;
+  } catch (error) {
+    console.error(`❌ Error scheduling cleanup for room ${this.roomId}:`, error);
+    throw error;
+  }
+};
+
+// Method to cancel scheduled cleanup (when users rejoin)
+roomSchema.methods.cancelCleanup = async function() {
+  try {
+    if (this.inactiveCleanupAt) {
+      this.inactiveCleanupAt = null;
+      await this.save();
+      console.log(`✅ Cancelled cleanup for room ${this.roomId}`);
+    }
+    return this;
+  } catch (error) {
+    console.error(`❌ Error cancelling cleanup for room ${this.roomId}:`, error);
+    throw error;
+  }
+};
+
+// Static method to find rooms ready for cleanup
+roomSchema.statics.findRoomsForCleanup = async function() {
+  const now = new Date();
+  return await this.find({
+    inactiveCleanupAt: { $lte: now }
+  });
+};
+
+// Static method to find inactive rooms (no activity for X hours)
+roomSchema.statics.findInactiveRooms = async function(inactiveHours = 48) {
+  const cutoffTime = new Date();
+  cutoffTime.setHours(cutoffTime.getHours() - inactiveHours);
+  
+  return await this.find({
+    lastActivity: { $lte: cutoffTime },
+    inactiveCleanupAt: null // Not already scheduled for cleanup
+  });
+};
+
+export default mongoose.model('Room', roomSchema);

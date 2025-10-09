@@ -1,6 +1,7 @@
 // server/sockets/room.js
 
 import autoSaveService from '../services/autoSaveService.js';
+import roomCleanupService from '../services/roomCleanupService.js';
 import Room from '../models/Room.js';
 
 // Simple in-memory data store for rooms
@@ -481,6 +482,17 @@ export const registerRoomHandlers = (io, socket) => {
         io.to(t.socketId).emit('update-student-list', { students: studentList });
       });
 
+      // Update room activity in database
+      try {
+        const dbRoom = await Room.findOne({ roomId });
+        if (dbRoom) {
+          await dbRoom.updateActivity();
+          await dbRoom.cancelCleanup(); // Cancel any scheduled cleanup when users rejoin
+        }
+      } catch (error) {
+        console.error(`❌ Error updating room activity for ${roomId}:`, error);
+      }
+
       // NEW: Always broadcast full room state after join
       broadcastRoomState(io, roomId, isNewUser ? 'user-joined' : 'user-reconnected');
     } catch (error) {
@@ -705,6 +717,16 @@ export const registerRoomHandlers = (io, socket) => {
       
       console.log(`✅ [PERMISSION_GRANTED] User ${username} (${userId}) has permission to edit code`);
       
+      // Update room activity when code changes occur
+      try {
+        const dbRoom = await Room.findOne({ roomId });
+        if (dbRoom) {
+          await dbRoom.updateActivity();
+        }
+      } catch (activityError) {
+        console.error(`❌ Error updating room activity for ${roomId}:`, activityError);
+      }
+      
       // Attempt to update the DB and log the query and update
       console.log("[SOCKET] Attempting DB update:", {
         query: { roomId },
@@ -880,6 +902,17 @@ export const registerRoomHandlers = (io, socket) => {
       if (room.users.length === 0) {
         autoSaveService.cleanupRoom(roomId);
         console.log(`🧹 Cleaned up auto-save for empty room ${roomId}`);
+        
+        // Schedule database room for cleanup when it becomes empty
+        try {
+          const dbRoom = await Room.findOne({ roomId });
+          if (dbRoom) {
+            await dbRoom.scheduleCleanup(24); // Schedule cleanup in 24 hours
+            console.log(`⏰ Scheduled database cleanup for empty room ${roomId}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error scheduling database cleanup for room ${roomId}:`, error);
+        }
       }
 
       // Emit updated user list
