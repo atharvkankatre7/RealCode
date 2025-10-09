@@ -114,9 +114,9 @@ class SocketService {
       this.socket = io(SOCKET_URL, {
         // Try polling first, then upgrade to WebSocket (more robust in diverse dev environments)
         transports: ['polling', 'websocket'],
-        reconnectionAttempts: 5,
+        reconnectionAttempts: 10,
         reconnectionDelay: 1000,
-        timeout: 10000,
+        timeout: 30000, // Increased for Render cold starts
         autoConnect: true,
         forceNew: true,
         upgrade: true, // Allow upgrading to websocket after initial connection
@@ -428,7 +428,7 @@ class SocketService {
     }
   }
 
-  // Create a new room
+  // Create a new room with retry logic
   public createRoom(username: string, roomId?: string): Promise<{ roomId: string, username: string }> {
     return new Promise((resolve, reject) => {
       if (!this.socket || !this.isConnected()) {
@@ -444,7 +444,21 @@ class SocketService {
         }
       }
 
+      let isResolved = false;
+      
+      // Set timeout for the socket emission
+      const timeoutId = setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          reject(new Error('Room creation timeout - server did not respond in time'));
+        }
+      }, 30000); // 30 second timeout for Render cold starts
+      
       this.socket.emit('create-room', { username, roomId, userId }, (response: { roomId: string; username?: string; role?: string; users?: Array<{ socketId: string; username: string; userId?: string; role: string }>; error?: string }) => {
+        clearTimeout(timeoutId);
+        if (isResolved) return; // Already timed out
+        isResolved = true;
+        
         if (response.error) {
           reject(new Error(response.error));
         } else {

@@ -110,8 +110,8 @@ const RoomForm = () => {
                 }
               };
               checkConnection();
-              // Fallback timeout
-              setTimeout(() => reject(new Error('Socket connection timeout')), 15000);
+              // Fallback timeout - increased for Render cold starts
+              setTimeout(() => reject(new Error('Socket connection timeout')), 30000);
             })
           ]);
           console.log('Socket connected successfully');
@@ -128,8 +128,49 @@ const RoomForm = () => {
       router.push(`/editor/${createdRoomId}`)
     } catch (error: any) {
       console.error("Error creating room:", error)
-      const errorMessage = error.message || "Failed to create room. Please try again."
-      toast.error(errorMessage)
+      
+      // If socket creation fails, try HTTP fallback
+      if (error.message?.includes('Socket') || error.message?.includes('connection')) {
+        try {
+          console.log('Socket creation failed, trying HTTP fallback...');
+          const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
+          
+          // Generate userId if not exists
+          let userId = localStorage.getItem('userId');
+          if (!userId) {
+            userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            localStorage.setItem('userId', userId);
+          }
+          
+          const response = await fetch(`${API_URL}/api/create-room`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              username: createUsername,
+              roomId: roomIdToCreate,
+              userId: userId
+            })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            toast.success(`Created new room: ${data.roomId}`);
+            router.push(`/editor/${data.roomId}`);
+            return;
+          } else {
+            throw new Error(`HTTP fallback failed: ${response.status}`);
+          }
+        } catch (fallbackError: any) {
+          console.error('HTTP fallback also failed:', fallbackError);
+          const errorMessage = "Failed to create room. Please check your internet connection and try again.";
+          toast.error(errorMessage);
+        }
+      } else {
+        const errorMessage = error.message || "Failed to create room. Please try again."
+        toast.error(errorMessage)
+      }
       setIsLoading(false)
     }
   }
@@ -166,8 +207,8 @@ const RoomForm = () => {
                 }
               };
               checkConnection();
-              // Fallback timeout
-              setTimeout(() => reject(new Error('Socket connection timeout')), 15000);
+              // Fallback timeout - increased for Render cold starts
+              setTimeout(() => reject(new Error('Socket connection timeout')), 30000);
             })
           ]);
           console.log('Socket connected successfully');

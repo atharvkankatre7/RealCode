@@ -295,13 +295,26 @@ app.get('/health', (_, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
     port: process.env.PORT || 5002,
-    socketIO: 'enabled'
+    socketIO: 'enabled',
+    totalRooms: Object.keys(rooms).length,
+    totalConnections: io.engine.clientsCount || 0,
+    uptime: process.uptime()
   });
 });
 
 // Test endpoint for user preferences
 app.get('/api/test-preferences', (_, res) => {
   res.json({ message: 'Preferences endpoints are working!' });
+});
+
+// Test endpoint for connection diagnostics
+app.get('/api/test-connection', (_, res) => {
+  res.json({ 
+    message: 'API connection is working!',
+    timestamp: new Date().toISOString(),
+    server: 'RealCode Backend',
+    status: 'healthy'
+  });
 });
 
 // Add database health check endpoint
@@ -349,6 +362,98 @@ app.use('/api/code-history', codeHistoryRoutes)
 app.use('/api/comments', commentRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/room-management', roomManagementRoutes)
+
+// Add HTTP fallback endpoint for creating rooms
+app.post('/api/create-room', async (req, res) => {
+  try {
+    const { username, roomId: customRoomId, userId } = req.body;
+
+    if (!username || !userId) {
+      return res.status(400).json({ error: "Username and userId are required" });
+    }
+
+    console.log(`HTTP fallback: ${username} (${userId}) creating room`);
+
+    // Use exactly the username provided by the user
+    const validUsername = username;
+    const validUserId = userId;
+
+    // Always use the provided room ID (which should be randomly generated on the client)
+    const roomId = customRoomId || `${Math.random().toString(36).substring(2, 11)}`;
+    
+    console.log(`HTTP fallback: Creating room ${roomId} for ${validUsername} (${validUserId})`);
+
+    // Get or create the room
+    const room = getRoom(roomId);
+
+    // Set the teacher ID if not already set (room creator becomes the permanent teacher)
+    if (!room.teacherId) {
+      room.teacherId = validUserId;
+      console.log(`HTTP fallback: Set teacherId to ${validUserId} for room ${roomId}`);
+    }
+
+    // Check if user already exists in the room
+    const existingUserIndex = room.users.findIndex(u => u.userId === validUserId);
+    let role = "teacher"; // Room creator is always teacher
+
+    if (existingUserIndex === -1) {
+      // Add new user to room
+      room.users.push({
+        socketId: `http-${validUserId}`,
+        username: validUsername,
+        userId: validUserId,
+        role: role
+      });
+      console.log(`HTTP fallback: Added new user ${validUsername} (${validUserId}) as ${role} in room ${roomId}`);
+    } else {
+      // Update existing user
+      room.users[existingUserIndex].socketId = `http-${validUserId}`;
+      room.users[existingUserIndex].role = role;
+      console.log(`HTTP fallback: Updated existing user ${validUsername} (${validUserId}) as ${role} in room ${roomId}`);
+    }
+
+    // Try to create room in database
+    try {
+      let dbRoom = await Room.findOne({ roomId });
+      if (!dbRoom) {
+        dbRoom = new Room({
+          roomId,
+          createdBy: validUserId,
+          currentCode: {
+            content: '// Start coding here...',
+            language: 'javascript',
+            lastSaved: new Date(),
+            lastSavedBy: validUserId
+          }
+        });
+        await dbRoom.save();
+        await dbRoom.addParticipant(validUserId, 'teacher');
+        console.log(`HTTP fallback: Created room ${roomId} in database`);
+      } else {
+        await dbRoom.updateActivity();
+        await dbRoom.cancelCleanup();
+        console.log(`HTTP fallback: Updated existing room ${roomId} in database`);
+      }
+    } catch (dbError) {
+      console.error(`HTTP fallback: Database error for room ${roomId}:`, dbError);
+      // Don't fail the request if DB operation fails
+    }
+
+    console.log(`HTTP fallback: Room ${roomId} created successfully by ${validUsername} (${validUserId})`);
+
+    // Return success response
+    res.json({
+      success: true,
+      roomId,
+      username: validUsername,
+      role,
+      users: room.users
+    });
+  } catch (error) {
+    console.error(`HTTP fallback create-room error:`, error);
+    res.status(500).json({ error: `Server error: ${error.message}` });
+  }
+});
 
 // Add HTTP fallback endpoint for joining rooms
 app.post('/api/join-room', (req, res) => {
