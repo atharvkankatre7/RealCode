@@ -1,6 +1,8 @@
 "use client"
 import { createContext, useContext, useEffect, useState } from "react"
 import { useUser, useClerk, useSignIn, useSignUp } from "@clerk/nextjs"
+import { useRouter } from "next/navigation"
+import toast from "react-hot-toast"
 
 // Define the User type for our auth system
 interface User {
@@ -35,6 +37,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const { signOut, setActive } = useClerk()
   const { signIn, isLoaded: signInLoaded } = useSignIn()
   const { signUp, isLoaded: signUpLoaded } = useSignUp()
+  const router = useRouter()
 
   const [user, setUser] = useState<User | null>(null)
 
@@ -89,14 +92,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [clerkLoaded, clerkUser, isSignedIn])
 
   const signInWithGoogle = async () => {
-    if (!signInLoaded) return { success: false, error: "Auth not loaded" }
+    if (!signInLoaded) {
+      toast.error("Authentication not ready, please wait...")
+      return { success: false, error: "Auth not loaded" }
+    }
+    
     try {
+      toast.loading("Redirecting to Google...")
       await signIn.authenticateWithRedirect({
         strategy: "oauth_google",
         redirectUrl: window.location.origin + "/sso-callback",
         redirectUrlComplete: window.location.origin + "/"
       })
+      return { success: true }
     } catch (error: any) {
+      toast.dismiss()
+      toast.error(error.message || "Failed to sign in with Google")
+      console.error('Google sign-in error:', error)
       return { success: false, error: error.message }
     }
   }
@@ -109,10 +121,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await setActive({ session: result.createdSessionId })
         return { success: true }
       } else {
-        return { success: false, error: "Sign-in failed", nextStep: result.status }
+        return { success: false, error: "Sign-in requires verification", nextStep: result.status }
       }
     } catch (error: any) {
-      return { success: false, error: error.message }
+      // Check for common error patterns
+      if (error.message?.includes('Couldn\'t find your account') || error.message?.includes('Invalid email')) {
+        return { success: false, notFound: true, error: "No account found with this email address" }
+      } else if (error.message?.includes('password')) {
+        return { success: false, error: "Incorrect password. Please try again." }
+      } else {
+        return { success: false, error: error.message || "Sign-in failed" }
+      }
     }
   }
 

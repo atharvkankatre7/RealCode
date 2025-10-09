@@ -44,7 +44,7 @@ const LoginPage = () => {
         toast.success("Signed in successfully!")
         router.push("/")
       } else if (result.notFound) {
-        toast.error("Account nahi mila. Pehle sign up karein ya email check karein.")
+        toast.error("No account found with this email. Redirecting to sign up...")
         setTimeout(() => router.push("/signup"), 1500)
       } else if (result.nextStep || (result.error && result.error.toLowerCase().includes("verification"))) {
         setPendingVerification(true)
@@ -84,7 +84,10 @@ const LoginPage = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <h1 className="text-3xl font-bold mb-6">Login</h1>
+        <h1 className="text-3xl font-bold mb-4">Welcome Back</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+          New user? No problem! Google sign-in will automatically create your account.
+        </p>
         {pendingVerification ? (
           <motion.form onSubmit={handleVerifyCode} className="space-y-4 pt-4">
             <div className="space-y-4">
@@ -122,7 +125,7 @@ const LoginPage = () => {
         ) : (
           <div className="space-y-4 pt-4">
             <motion.button type="button" onClick={handleGoogleSignIn} disabled={loading} className="w-full py-3 bg-white dark:bg-zinc-800 text-gray-700 dark:text-white rounded-lg font-medium flex items-center justify-center gap-2 border border-gray-300 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-all" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <FcGoogle className="text-xl" />Sign in with Google
+              <FcGoogle className="text-xl" />Continue with Google
             </motion.button>
             <div className="flex items-center my-2">
               <div className="flex-grow border-t border-gray-300 dark:border-gray-700"></div>
@@ -135,7 +138,12 @@ const LoginPage = () => {
           </div>
         )}
         <div className="pt-4 text-center">
-          <p className="text-gray-500 dark:text-gray-400 text-sm">Don't have an account? <Link href="/signup" className="text-blue-500 hover:text-blue-600 font-medium">Sign up</Link></p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">
+            Need to create an account? <Link href="/signup" className="text-blue-500 hover:text-blue-600 font-medium">Sign up with email</Link>
+          </p>
+          <p className="text-gray-400 dark:text-gray-500 text-xs mt-2">
+            (Google sign-in works for both new and existing accounts)
+          </p>
         </div>
       </motion.div>
     </div>

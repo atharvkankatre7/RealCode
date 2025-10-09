@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth, useClerk } from "@clerk/nextjs"
 import { motion } from "framer-motion"
+import toast from "react-hot-toast"
 
 export default function SSOCallback() {
   const router = useRouter()
@@ -14,13 +15,20 @@ export default function SSOCallback() {
     async function processCallback() {
       try {
         await handleRedirectCallback({ redirectUrl: "/" })
+        toast.dismiss() // Clear any loading toasts
+        toast.success("Successfully signed in! Welcome to RealCode! 🎉")
         router.push("/")
-      } catch (error) {
+      } catch (error: any) {
+        toast.dismiss()
+        toast.error("Authentication failed. Please try again.")
+        console.error('SSO callback error:', error)
         router.push("/login?error=sso-verification-failed")
       }
     }
     if (isLoaded) {
       if (isSignedIn) {
+        toast.dismiss()
+        toast.success("Welcome back! 🚀")
         router.push("/")
       } else {
         processCallback()
