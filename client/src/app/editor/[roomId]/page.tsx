@@ -198,10 +198,10 @@ useEffect(() => {
 }, [mobileMenuOpen]);
 
 return (
-<div className="w-full flex items-center px-6 py-4 justify-between gap-4 relative bg-slate-900/80 border-b border-slate-800/30">
+<div className="w-full flex items-center px-3 sm:px-6 py-3 sm:py-4 justify-between gap-2 sm:gap-4 relative bg-slate-900/80 border-b border-slate-800/30">
     {/* Hamburger for mobile */}
     <button
-      className="lg:hidden flex items-center justify-center w-9 h-9 rounded-md bg-slate-800/40 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all duration-200 mr-3"
+      className="lg:hidden flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md bg-slate-800/40 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all duration-200 mr-2 sm:mr-3"
       aria-label="Open menu"
       aria-expanded={mobileMenuOpen}
       aria-controls="mobile-navbar-drawer"
@@ -209,22 +209,22 @@ return (
       tabIndex={0}
       type="button"
     >
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
     </button>
-    {/* Left: App/Room Name */}
-    <div className="flex items-center gap-4 min-w-0 flex-1">
-        <h1 className="text-lg font-semibold text-white truncate tracking-tight">RealCode</h1>
-        <div className="bg-cyan-500/10 rounded-lg px-3 py-1.5 text-xs font-medium text-cyan-300 border border-cyan-500/20">
-          Room: {roomId}
+    {/* Left: App/Room Name - Mobile Optimized */}
+    <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1 overflow-hidden">
+        <h1 className="text-base sm:text-lg font-semibold text-white truncate tracking-tight">RealCode</h1>
+        <div className="hidden xs:block bg-cyan-500/10 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-medium text-cyan-300 border border-cyan-500/20 truncate">
+          <span className="hidden sm:inline">Room: </span>{roomId.length > 8 ? roomId.substring(0, 8) + '...' : roomId}
         </div>
     </div>
-    {/* Key Actions: Always visible, responsive layout */}
-    <div className="flex items-center gap-3 ml-auto flex-wrap overflow-x-auto no-scrollbar">
-        {/* Enhanced Language Selector */}
+    {/* Key Actions: Mobile Optimized Layout */}
+    <div className="flex items-center gap-1.5 sm:gap-3 ml-auto overflow-x-auto no-scrollbar">
+        {/* Enhanced Language Selector - Mobile Optimized */}
         <Popover
-            trigger={<button className="flex items-center gap-2 bg-slate-800/40 hover:bg-cyan-500/20 text-slate-200 hover:text-cyan-300 text-sm rounded-lg px-3 py-2 border border-slate-700/50 hover:border-cyan-500/30 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all duration-200 shadow-sm hover:shadow-md" aria-label="Select language">
-                <span className="text-base">{languageOptions.find(l => l.value === language)?.icon}</span>
-                <span className="hidden md:inline font-medium">{languageOptions.find(l => l.value === language)?.label}</span>
+            trigger={<button className="flex items-center gap-1 sm:gap-2 bg-slate-800/40 hover:bg-cyan-500/20 text-slate-200 hover:text-cyan-300 text-xs sm:text-sm rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 border border-slate-700/50 hover:border-cyan-500/30 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all duration-200 shadow-sm hover:shadow-md whitespace-nowrap" aria-label="Select language">
+                <span className="text-sm sm:text-base">{languageOptions.find(l => l.value === language)?.icon}</span>
+                <span className="hidden sm:inline font-medium">{languageOptions.find(l => l.value === language)?.label}</span>
             </button>}
         >
             <div className="bg-zinc-900/95 backdrop-blur-sm rounded-xl shadow-xl border border-white/5 p-3 min-w-[200px]">
@@ -349,49 +349,49 @@ return (
                 </div>
             </div>
         </Popover>
-        {/* Run Button with Enhanced Styling */}
+        {/* Run Button - Mobile Optimized */}
         <button 
           onClick={onRun} 
-          className="group flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 focus:ring-2 focus:ring-cyan-500/50 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-cyan-500/25 active:scale-95 transform hover:-translate-y-1" 
+          className="group flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 focus:ring-2 focus:ring-cyan-500/50 text-white font-semibold rounded-lg sm:rounded-xl transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-cyan-500/25 active:scale-95 transform hover:-translate-y-0.5 sm:hover:-translate-y-1 whitespace-nowrap" 
           title="Run code (Ctrl+Enter)" 
           aria-label="Run code"
         >
-          <FiPlay className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" />
-          <span className="hidden md:inline text-base">Run</span>
+          <FiPlay className="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform duration-200" />
+          <span className="text-sm sm:text-base">Run</span>
         </button>
         
-        {/* Copy Button (hide on xs) */}
+        {/* Copy Button - Mobile Hidden */}
         <button 
           onClick={onCopy} 
-          className="hidden xs:flex items-center justify-center w-10 h-10 rounded-xl bg-slate-800/60 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 active:scale-95 hover:shadow-lg hover:shadow-cyan-500/20" 
+          className="hidden sm:flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-slate-800/60 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 active:scale-95 hover:shadow-lg hover:shadow-cyan-500/20" 
           title="Copy code (Ctrl+C)" 
           aria-label="Copy code"
         >
-          <FiCopy className="w-4 h-4" />
+          <FiCopy className="w-3 h-3 sm:w-4 sm:h-4" />
         </button>
         
-        {/* Format Button (hide on xs) */}
+        {/* Format Button - Mobile Hidden */}
         <button 
           onClick={onFormat} 
-          className="hidden xs:flex items-center justify-center w-10 h-10 rounded-xl bg-slate-800/60 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 active:scale-95 hover:shadow-lg hover:shadow-cyan-500/20" 
+          className="hidden sm:flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-slate-800/60 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 active:scale-95 hover:shadow-lg hover:shadow-cyan-500/20" 
           title="Format code (Shift+Alt+F)" 
           aria-label="Format code"
         >
-          <FiAlignLeft className="w-4 h-4" />
+          <FiAlignLeft className="w-3 h-3 sm:w-4 sm:h-4" />
         </button>
         
-        {/* Code History Button */}
+        {/* Code History Button - Mobile Optimized */}
         <button 
           onClick={onOpenHistory} 
-          className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-800/60 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-300 focus:ring-2 focus:ring-cyan-500/50 active:scale-95 hover:shadow-lg hover:shadow-cyan-500/20" 
+          className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-slate-800/60 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-300 focus:ring-2 focus:ring-cyan-500/50 active:scale-95 hover:shadow-lg hover:shadow-cyan-500/20" 
           title="Code History" 
           aria-label="Code History"
         >
-          <FiClock className="w-4 h-4" />
+          <FiClock className="w-3 h-3 sm:w-4 sm:h-4" />
         </button>
-        {/* User List Button */}
+        {/* User List Button - Mobile Optimized */}
         <Popover
-            trigger={<button className="flex items-center justify-center w-8 h-8 rounded-md bg-slate-800/40 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 shadow-sm hover:shadow-md active:scale-95" aria-label="Show users"><FiUsers className="w-4 h-4 text-cyan-400" /></button>}
+            trigger={<button className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-slate-800/40 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 shadow-sm hover:shadow-md active:scale-95" aria-label="Show users"><FiUsers className="w-3 h-3 sm:w-4 sm:h-4 text-cyan-400" /></button>}
         >
             <div className="bg-zinc-900/95 backdrop-blur-sm rounded-xl shadow-xl border border-white/5 p-3 min-w-[240px] max-w-xs">
                 {/* Enhanced Title */}
@@ -449,11 +449,11 @@ return (
                 </div>
             </div>
         </Popover>
-        {/* Permission Button - Responsive */}
+        {/* Permission Button - Mobile Optimized */}
         {isTeacher && (
           <Popover
-            trigger={<button className={`flex items-center justify-center w-8 h-8 rounded-md bg-slate-800/40 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 shadow-sm hover:shadow-md active:scale-95`} aria-label="Change room permission" title="Change permission for this room">
-              {globalCanEdit ? <FiUnlock className="w-4 h-4" /> : <FiLock className="w-4 h-4" />}
+            trigger={<button className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-slate-800/40 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 shadow-sm hover:shadow-md active:scale-95`} aria-label="Change room permission" title="Change permission for this room">
+              {globalCanEdit ? <FiUnlock className="w-3 h-3 sm:w-4 sm:h-4" /> : <FiLock className="w-3 h-3 sm:w-4 sm:h-4" />}
             </button>}
           >
             <div className="bg-zinc-900/95 backdrop-blur-sm rounded-xl shadow-xl border border-white/5 p-5 min-w-[240px] max-w-xs flex flex-col items-center">
@@ -515,19 +515,19 @@ return (
             </div>
           </Popover>
         )}
-        {/* Theme Toggle Switch */}
+        {/* Theme Toggle Switch - Mobile Optimized */}
         <button 
           onClick={toggleTheme} 
-          className="flex items-center justify-center w-8 h-8 rounded-md bg-slate-800/40 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 shadow-sm hover:shadow-md active:scale-95" 
+          className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-slate-800/40 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 shadow-sm hover:shadow-md active:scale-95" 
           title="Toggle theme" 
           aria-label="Toggle theme"
         >
-            {isDark ? <FiSun className="w-4 h-4 text-yellow-400" /> : <FiMoon className="w-4 h-4 text-cyan-400" />}
+            {isDark ? <FiSun className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400" /> : <FiMoon className="w-3 h-3 sm:w-4 sm:h-4 text-cyan-400" />}
         </button>
         
-        {/* User Avatar Dropdown */}
+        {/* User Avatar Dropdown - Mobile Optimized */}
         <Popover
-            trigger={<button className="w-8 h-8 rounded-md flex items-center justify-center border border-slate-600/50 shadow-sm bg-slate-800/40 hover:bg-cyan-500/20 transition-all duration-200 active:scale-95" style={{ backgroundColor: avatarColor }} aria-label="User menu"><span className="text-white font-semibold text-sm">{initials}</span></button>}
+            trigger={<button className="w-7 h-7 sm:w-8 sm:h-8 rounded-md flex items-center justify-center border border-slate-600/50 shadow-sm bg-slate-800/40 hover:bg-cyan-500/20 transition-all duration-200 active:scale-95" style={{ backgroundColor: avatarColor }} aria-label="User menu"><span className="text-white font-semibold text-xs sm:text-sm">{initials}</span></button>}
         >
             <div className="bg-zinc-900 rounded-lg shadow-lg p-4 min-w-[180px]">
                 {user && <div className="px-2 py-2 text-sm text-gray-300 border-b border-gray-600 mb-2">{user.email}</div>}
@@ -916,7 +916,7 @@ return <div>Error: Room ID is missing. Please join a valid room.</div>;
 return (
 <ProtectedRoute>
     <EditPermissionProvider>
-        <div className="w-screen h-screen flex flex-col overflow-x-hidden overflow-y-hidden bg-gradient-to-br from-[#0a0a0f] via-[#111827] to-[#0f172a] relative">
+<div className="w-screen h-screen flex flex-col overflow-x-hidden overflow-y-hidden bg-gradient-to-br from-[#0a0a0f] via-[#111827] to-[#0f172a] relative touch-pan-y">
             {/* Sticky Top Navbar with Glassmorphism */}
             <div className="sticky top-0 z-30 shadow-2xl border-b border-white/10 bg-slate-900/80 backdrop-blur-xl">
                 <TopNavbar 
@@ -934,43 +934,56 @@ return (
                     onOpenHistory={handleOpenHistory}
                 />
             </div>
-            {/* Main Content Area with Grid Alignment */}
-            <div className="flex flex-col lg:flex-row flex-1 w-full h-full overflow-hidden min-w-0 p-0 gap-0">
-                {/* Editor Area with Enhanced Styling */}
-                <div className="flex-1 min-w-0 min-h-[300px] w-full h-full flex flex-col overflow-hidden bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 shadow-2xl border-r border-white/10 relative p-6 transition-all duration-300 custom-scrollbar rounded-r-2xl">
-                    <div className="editor-container flex-1 min-w-0 w-full h-full flex flex-col">
-                        <CodeEditor
-                            ref={editorRef}
-                            roomId={roomId}
-                            username={username}
-                            onExecutionResult={handleExecutionResult}
-                            onActiveUsersChange={handleActiveUsersChange}
-                            options={{ automaticLayout: true }}
-                            language={language}
-                        />
+            {/* Main Content Area - Mobile First Responsive Layout */}
+            <div className="flex flex-col h-full flex-1 w-full overflow-hidden min-w-0">
+                {/* Mobile: Stack vertically, Desktop: Side by side */}
+                <div className="flex flex-col lg:flex-row flex-1 w-full h-full overflow-hidden min-w-0 p-0 gap-0">
+                    {/* Editor Area - Mobile Optimized */}
+                    <div className="flex-1 min-w-0 min-h-[50vh] lg:min-h-[300px] w-full h-full flex flex-col overflow-hidden bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 shadow-2xl lg:border-r border-white/10 relative p-2 sm:p-4 lg:p-6 transition-all duration-300 custom-scrollbar lg:rounded-r-2xl">
+                        <div className="editor-container flex-1 min-w-0 w-full h-full flex flex-col">
+                            <CodeEditor
+                                ref={editorRef}
+                                roomId={roomId}
+                                username={username}
+                                onExecutionResult={handleExecutionResult}
+                                onActiveUsersChange={handleActiveUsersChange}
+                                options={{ 
+                                    automaticLayout: true,
+                                    // Mobile-specific Monaco options
+                                    fontSize: typeof window !== 'undefined' && window.innerWidth < 768 ? 12 : 14,
+                                    wordWrap: 'on',
+                                    scrollBeyondLastLine: false,
+                                    minimap: { enabled: typeof window !== 'undefined' && window.innerWidth >= 1024 },
+                                    folding: typeof window !== 'undefined' && window.innerWidth >= 768
+                                }}
+                                language={language}
+                            />
+                        </div>
+                        <div className="w-full mt-2 lg:mt-4">
+                            <EditorPermissionStatus />
+                        </div>
                     </div>
-                    <div className="w-full mt-4">
-                        <EditorPermissionStatus />
-                    </div>
-                </div>
-                {/* Resize Handle */}
-                {!terminalCollapsed && (
+                    
+                    {/* Resize Handle - Desktop Only */}
+                    {!terminalCollapsed && (
+                        <div 
+                            className="hidden lg:block w-1 bg-slate-700/30 hover:bg-cyan-500/50 cursor-col-resize flex-shrink-0 transition-colors duration-200 relative group"
+                            onMouseDown={handleMouseDown}
+                        >
+                            <div className="absolute inset-0 w-2 -translate-x-0.5 group-hover:bg-cyan-500/20" />
+                        </div>
+                    )}
+                    
+                    {/* Terminal Panel - Responsive Layout */}
                     <div 
-                        className="w-1 bg-slate-700/30 hover:bg-cyan-500/50 cursor-col-resize flex-shrink-0 transition-colors duration-200 relative group"
-                        onMouseDown={handleMouseDown}
+                        className={`flex-shrink-0 bg-slate-900/95 lg:border-l border-t lg:border-t-0 border-white/10 overflow-y-auto flex flex-col lg:rounded-l-2xl shadow-2xl transition-all duration-300 min-w-0 custom-scrollbar relative ${
+                            terminalCollapsed 
+                                ? 'h-12 lg:w-12' // Mobile: collapsed height, Desktop: collapsed width
+                                : 'h-[40vh] lg:h-full' // Mobile: 40% viewport height, Desktop: full height
+                        }`}
+                        style={!terminalCollapsed && typeof window !== 'undefined' && window.innerWidth >= 1024 ? { width: `${terminalWidth}px` } : {}}
                     >
-                        <div className="absolute inset-0 w-2 -translate-x-0.5 group-hover:bg-cyan-500/20" />
-                    </div>
-                )}
-                
-                {/* Terminal Panel with Enhanced Styling */}
-                <div 
-                    className={`flex-shrink-0 bg-slate-900/95 border-l border-white/10 overflow-y-auto flex flex-col rounded-l-2xl shadow-2xl transition-all duration-300 min-w-0 custom-scrollbar relative ${
-                        terminalCollapsed ? 'w-12' : ''
-                    }`}
-                    style={!terminalCollapsed ? { width: `${terminalWidth}px` } : {}}
-                >
-                    {/* Always Visible Toggle Button */}
+                    {/* Always Visible Toggle Button - Mobile Optimized */}
                     <button 
                         onClick={() => {
                             setTerminalCollapsed(!terminalCollapsed);
@@ -981,21 +994,32 @@ return (
                                 }, 300); // Wait for transition to complete
                             }
                         }}
-                        className="absolute top-3 right-3 w-8 h-8 rounded-md bg-slate-700/80 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-200 flex items-center justify-center active:scale-95 group z-50 shadow-lg border border-slate-600/50"
+                        className={`absolute top-2 right-2 sm:top-3 sm:right-3 w-8 h-8 sm:w-10 sm:h-10 rounded-md bg-slate-700/80 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 transition-all duration-200 flex items-center justify-center active:scale-95 group z-50 shadow-lg border border-slate-600/50 ${
+                            terminalCollapsed 
+                                ? 'lg:top-1/2 lg:-translate-y-1/2 lg:right-2' // Desktop: center vertically when collapsed
+                                : '' // Mobile/Desktop expanded: top-right corner
+                        }`}
                         title={terminalCollapsed ? "Expand terminal" : "Collapse terminal"}
                     >
-                        <span className="text-sm font-bold transition-transform duration-200 group-hover:scale-110">{terminalCollapsed ? '▶' : '−'}</span>
+                        <span className="text-sm sm:text-base font-bold transition-transform duration-200 group-hover:scale-110">
+                            {terminalCollapsed ? (typeof window !== 'undefined' && window.innerWidth < 1024 ? '▲' : '▶') : '−'}
+                        </span>
                     </button>
                     
-                    {/* Terminal Header with Enhanced Styling */}
-                    <div className={`flex items-center justify-between px-4 py-3 bg-slate-800/80 border-b border-white/10 rounded-tl-2xl transition-all duration-300 ${terminalCollapsed ? 'opacity-0' : 'opacity-100'}`}>
-                        <h3 className="text-slate-200 font-medium text-xs uppercase tracking-wider flex items-center gap-2">
-                            <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></span>
-                            Terminal
+                    {/* Terminal Header - Mobile Optimized */}
+                    <div className={`flex items-center justify-between px-2 sm:px-4 py-2 sm:py-3 bg-slate-800/80 border-b border-white/10 lg:rounded-tl-2xl transition-all duration-300 ${
+                        terminalCollapsed ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100'
+                    }`}>
+                        <h3 className="text-slate-200 font-medium text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-cyan-400 rounded-full animate-pulse"></span>
+                            <span className="hidden sm:inline">Terminal</span>
+                            <FiTerminal className="w-4 h-4 sm:hidden" />
                         </h3>
                     </div>
                     
-                    <div className={`flex-1 p-4 transition-all duration-300 ${terminalCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                    <div className={`flex-1 p-2 sm:p-4 transition-all duration-300 overflow-hidden ${
+                        terminalCollapsed ? 'opacity-0 pointer-events-none h-0' : 'opacity-100'
+                    }`}>
                         <TerminalPanel
                             runCode={runCodeString}
                             language={language}

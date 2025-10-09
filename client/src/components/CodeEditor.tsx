@@ -1566,24 +1566,24 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
   return (
     <div className="relative flex-1 min-w-0 flex flex-col">
 
-      {/* Save Status Indicator */}
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+      {/* Save Status Indicator - Mobile Optimized */}
+      <div className="absolute top-1 sm:top-2 right-1 sm:right-2 z-10 flex items-center gap-2">
         {saveStatus === 'saving' && (
-          <div className="flex items-center gap-1 px-2 py-1 bg-blue-500 text-white text-xs rounded">
-            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            Saving...
+          <div className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-blue-500 text-white text-xs rounded">
+            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span className="hidden xs:inline">Saving...</span>
           </div>
         )}
         {saveStatus === 'saved' && lastSaved && (
-          <div className="flex items-center gap-1 px-2 py-1 bg-green-500 text-white text-xs rounded">
+          <div className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-500 text-white text-xs rounded">
             <span>✓</span>
-            Saved {lastSaved.toLocaleTimeString()}
+            <span className="hidden xs:inline">Saved {lastSaved.toLocaleTimeString()}</span>
           </div>
         )}
         {saveStatus === 'error' && (
-          <div className="flex items-center gap-1 px-2 py-1 bg-red-500 text-white text-xs rounded">
+          <div className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-red-500 text-white text-xs rounded">
             <span>✗</span>
-            Save failed
+            <span className="hidden xs:inline">Save failed</span>
           </div>
         )}
       </div>
@@ -1597,10 +1597,10 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
         onMount={handleEditorDidMount}
         onChange={handleEditorChange}
         options={{
-          fontSize: 14,
+          fontSize: typeof window !== 'undefined' && window.innerWidth < 768 ? 12 : 14,
           fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', 'monospace'",
-          lineHeight: 22,
-          minimap: { enabled: false },
+          lineHeight: typeof window !== 'undefined' && window.innerWidth < 768 ? 18 : 22,
+          minimap: { enabled: typeof window !== 'undefined' && window.innerWidth >= 1024 },
           scrollBeyondLastLine: false,
           wordWrap: "on",
           readOnly: !canEdit && !isTeacher, // Only disables editing, allows scroll/select/copy
@@ -1608,15 +1608,25 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
           cursorBlinking: "blink",
           contextmenu: canEdit || isTeacher,
           lineNumbers: "on",
-          lineNumbersMinChars: 3,
-          padding: { top: 16, bottom: 16 },
+          lineNumbersMinChars: typeof window !== 'undefined' && window.innerWidth < 640 ? 2 : 3,
+          padding: { 
+            top: typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 16, 
+            bottom: typeof window !== 'undefined' && window.innerWidth < 768 ? 8 : 16,
+            left: typeof window !== 'undefined' && window.innerWidth < 640 ? 4 : 8,
+            right: typeof window !== 'undefined' && window.innerWidth < 640 ? 4 : 8
+          },
           renderLineHighlight: "all",
+          // Mobile-specific optimizations
+          folding: typeof window !== 'undefined' && window.innerWidth >= 768,
+          glyphMargin: typeof window !== 'undefined' && window.innerWidth >= 640,
+          fixedOverflowWidgets: typeof window !== 'undefined' && window.innerWidth < 768,
+          mouseWheelZoom: typeof window !== 'undefined' && window.innerWidth >= 768,
           ...(options || {}) // Merge in options from props
         }}
       />
       {typingUser && (
-        <div className="absolute bottom-2 left-2 z-10 bg-black/70 text-white text-xs px-3 py-1 rounded shadow">
-          <span className="font-medium">{typingUser}</span> is typing...
+        <div className="absolute bottom-1 sm:bottom-2 left-1 sm:left-2 z-10 bg-black/70 text-white text-xs px-2 sm:px-3 py-0.5 sm:py-1 rounded shadow max-w-[200px] truncate">
+          <span className="font-medium">{typingUser.length > 12 ? typingUser.substring(0, 12) + '...' : typingUser}</span> <span className="hidden xs:inline">is </span>typing...
         </div>
       )}
       {/* Remove overlay for students in view-only mode to allow scroll/select/copy */}
