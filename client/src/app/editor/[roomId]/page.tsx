@@ -914,30 +914,30 @@ return <div>Error: Room ID is missing. Please join a valid room.</div>;
 }
 
 return (
-<ProtectedRoute>
-    <EditPermissionProvider>
-<div className="w-screen h-screen flex flex-col overflow-x-hidden overflow-y-hidden bg-gradient-to-br from-[#0a0a0f] via-[#111827] to-[#0f172a] relative touch-pan-y">
-            {/* Sticky Top Navbar with Glassmorphism */}
-            <div className="sticky top-0 z-30 shadow-2xl border-b border-white/10 bg-slate-900/80 backdrop-blur-xl">
-                <TopNavbar 
-                    roomId={roomId} 
-                    onRun={handleRunCode}
-                    onCopy={handleCopyCode}
-                    onFormat={handleFormatCode}
-                    onLanguageChange={handleLanguageChange}
-                    language={language}
-                    activeUsers={activeUsers}
-                    user={user}
-                    logout={logout}
-                    theme={theme}
-                    toggleTheme={toggleTheme}
-                    onOpenHistory={handleOpenHistory}
-                />
-            </div>
-            {/* Main Content Area - Mobile First Responsive Layout */}
-            <div className="flex flex-col h-full flex-1 w-full overflow-hidden min-w-0">
-                {/* Mobile: Stack vertically, Desktop: Side by side */}
-                <div className="flex flex-col lg:flex-row flex-1 w-full h-full overflow-hidden min-w-0 p-0 gap-0">
+    <ProtectedRoute>
+        <EditPermissionProvider>
+            <div className="w-screen h-screen flex flex-col overflow-x-hidden overflow-y-hidden bg-gradient-to-br from-[#0a0a0f] via-[#111827] to-[#0f172a] relative touch-pan-y">
+                {/* Sticky Top Navbar with Glassmorphism */}
+                <div className="sticky top-0 z-30 shadow-2xl border-b border-white/10 bg-slate-900/80 backdrop-blur-xl">
+                    <TopNavbar 
+                        roomId={roomId} 
+                        onRun={handleRunCode}
+                        onCopy={handleCopyCode}
+                        onFormat={handleFormatCode}
+                        onLanguageChange={handleLanguageChange}
+                        language={language}
+                        activeUsers={activeUsers}
+                        user={user}
+                        logout={logout}
+                        theme={theme}
+                        toggleTheme={toggleTheme}
+                        onOpenHistory={handleOpenHistory}
+                    />
+                </div>
+                {/* Main Content Area - Mobile First Responsive Layout */}
+                <div className="flex flex-col h-full flex-1 w-full overflow-hidden min-w-0">
+                    {/* Mobile: Stack vertically, Desktop: Side by side */}
+                    <div className="flex flex-col lg:flex-row flex-1 w-full h-full overflow-hidden min-w-0 p-0 gap-0">
                     {/* Editor Area - Mobile Optimized */}
                     <div className="flex-1 min-w-0 min-h-[50vh] lg:min-h-[300px] w-full h-full flex flex-col overflow-hidden bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 shadow-2xl lg:border-r border-white/10 relative p-2 sm:p-4 lg:p-6 transition-all duration-300 custom-scrollbar lg:rounded-r-2xl">
                         <div className="editor-container flex-1 min-w-0 w-full h-full flex flex-col">
@@ -1027,20 +1027,21 @@ return (
                             className="mt-2"
                         />
                     </div>
+                    </div>
+                    </div>
                 </div>
             </div>
-        </div>
-        
-        {/* Code History Panel */}
-        <CodeHistoryPanel
-            isOpen={showHistory}
-            onClose={() => setShowHistory(false)}
-            onLoadCode={handleLoadCode}
-            getCurrentCode={() => editorRef.current?.getValue() || ""}
-            currentLanguage={language}
-        />
-    </EditPermissionProvider>
-</ProtectedRoute>
+            
+            {/* Code History Panel */}
+            <CodeHistoryPanel
+                isOpen={showHistory}
+                onClose={() => setShowHistory(false)}
+                onLoadCode={handleLoadCode}
+                getCurrentCode={() => editorRef.current?.getValue() || ""}
+                currentLanguage={language}
+            />
+        </EditPermissionProvider>
+    </ProtectedRoute>
 );
 }
 
