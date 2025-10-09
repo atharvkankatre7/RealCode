@@ -128,16 +128,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
           reconnectTimeoutRef.current = null;
         }
         
-        try {
-          term.writeln("\x1b[1;36m╭─────────────────────────────────────────────╮\x1b[0m");
-          term.writeln("\x1b[1;36m│\x1b[0m \x1b[1;32m✓ Connected to RealCode Terminal Server\x1b[0m \x1b[1;36m│\x1b[0m");
-          term.writeln("\x1b[1;36m│\x1b[0m \x1b[1;33mType 'help' for available commands\x1b[0m \x1b[1;36m│\x1b[0m");
-          term.writeln("\x1b[1;36m╰─────────────────────────────────────────────╯\x1b[0m");
-          term.writeln("");
-          term.writeln("\x1b[1;34m$\x1b[0m \x1b[1;37mReady to execute code...\x1b[0m");
-        } catch (error) {
-          console.warn('[Terminal] Failed to write connection message:', error);
-        }
+        // Clean connection - no welcome messages
       };
 
       return ws;
@@ -173,13 +164,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
           }
         } else if (parsed.type === "prompt-waiting") {
           setIsWaitingForInput(parsed.data);
-          if (parsed.data) {
-            try {
-              term.writeln("\r\n\x1b[1;33m[Waiting for input...]\x1b[0m");
-            } catch (error) {
-              console.warn('[Terminal] Failed to write prompt:', error);
-            }
-          }
+          // Clean input waiting - no messages
         }
       } catch (e) {
         // Fallback to raw data handling
@@ -211,11 +196,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         console.log('[Terminal] WebSocket disconnected, updating state');
         setIsConnected(false);
         
-        try {
-          term.writeln("\r\n\x1b[1;31m[Disconnected - Attempting to reconnect...]\x1b[0m");
-        } catch (error) {
-          console.warn('[Terminal] Failed to write disconnection message:', error);
-        }
+        // Clean disconnection - no messages
         
         // Attempt to reconnect after 3 seconds
         if (!reconnectTimeoutRef.current) {
@@ -422,16 +403,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   useEffect(() => {
     if (!isMountedRef.current) return; // Skip if component is unmounted
     if (runCode && wsRef.current?.readyState === 1) {
-      // Show execution feedback in terminal
-      if (termRef.current) {
-        termRef.current.writeln("");
-        termRef.current.writeln("\x1b[1;33m🚀 Executing code...\x1b[0m");
-        termRef.current.writeln("\x1b[1;36m┌─────────────────────────────────────────────┐\x1b[0m");
-        termRef.current.writeln("\x1b[1;36m│\x1b[0m \x1b[1;37mLanguage:\x1b[0m \x1b[1;32m" + language + "\x1b[0m");
-        termRef.current.writeln("\x1b[1;36m│\x1b[0m \x1b[1;37mTimestamp:\x1b[0m \x1b[1;32m" + new Date().toLocaleTimeString() + "\x1b[0m");
-        termRef.current.writeln("\x1b[1;36m└─────────────────────────────────────────────┘\x1b[0m");
-        termRef.current.writeln("");
-      }
+      // Clean execution - no decorative messages
       
       wsRef.current.send(JSON.stringify({ 
         type: "run_code", 
@@ -463,7 +435,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
             onClick={() => {
               if (termRef.current) {
                 termRef.current.clear();
-                termRef.current.writeln("\x1b[1;36m[Terminal cleared]\x1b[0m");
               }
             }}
             className="w-6 h-6 rounded-md bg-slate-700/50 hover:bg-red-500/20 text-slate-300 hover:text-red-400 transition-all duration-200 flex items-center justify-center text-xs"

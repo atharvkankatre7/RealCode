@@ -99,10 +99,7 @@ function isSimpleProgram(code, language) {
 // External code execution API for ultra-fast performance
 async function executeWithAPI(code, language, ws) {
   try {
-    ws.send(JSON.stringify({ 
-      type: "output", 
-      data: "⚡ Using ultra-fast execution API...\r\n" 
-    }));
+    // Clean API execution - no progress message
     
     // Using Judge0 API (free tier) - much faster than local execution
     const languageMap = {
@@ -984,11 +981,7 @@ terminalWss.on("connection", (ws) => {
         }
         
         if (canClientSide) {
-          // Ultra-fast client-side execution
-          ws.send(JSON.stringify({ 
-            type: "output", 
-            data: "⚡ Executing client-side for ultra-fast performance...\r\n" 
-          }));
+          // Ultra-fast client-side execution - no progress message
           
           if (language === 'javascript') {
             // Safe client-side JavaScript execution
@@ -1017,13 +1010,7 @@ terminalWss.on("connection", (ws) => {
           return;
         }
         
-        // Show optimized execution message for simple programs
-        if (isSimple) {
-          ws.send(JSON.stringify({ 
-            type: "output", 
-            data: `⚡ Detected simple ${language} program - using optimized execution path...\r\n` 
-          }));
-        }
+        // Simple program optimization - no message
         
         // Handle different language execution patterns
         if (language === 'java') {
@@ -1040,8 +1027,7 @@ terminalWss.on("connection", (ws) => {
             return;
           }
           
-          // Show compilation progress
-          ws.send(JSON.stringify({ type: "output", data: "🔨 Compiling Java code...\r\n" }));
+          // Clean compilation - no progress message
           
           // Debug: Log the Java code being compiled
           console.log(`🔍 Compiling Java file: ${filePath}`);
@@ -1087,7 +1073,7 @@ terminalWss.on("connection", (ws) => {
                 try { fs.unlinkSync(filePath); } catch {}
                 return;
               }
-              ws.send(JSON.stringify({ type: "output", data: '✅ Compilation successful! Running...\r\n' }));
+              // Compilation successful - no message
               runCodeWithInput(config.runCmd[0], config.runArgs);
             });
           } catch (err) {
@@ -1153,18 +1139,7 @@ terminalWss.on("connection", (ws) => {
             try { fs.unlinkSync(filePath); } catch {}
           }
         } else {
-          // Direct execution with progress indicator
-          if (language === 'python') {
-            ws.send(JSON.stringify({ type: "output", data: "🐍 Running Python code...\r\n" }));
-          } else if (language === 'javascript') {
-            ws.send(JSON.stringify({ type: "output", data: "🛫 Running JavaScript code...\r\n" }));
-          } else if (language === 'go') {
-            ws.send(JSON.stringify({ type: "output", data: "🚀 Running Go code...\r\n" }));
-          } else if (language === 'ruby') {
-            ws.send(JSON.stringify({ type: "output", data: "💎 Running Ruby code...\r\n" }));
-          } else {
-            ws.send(JSON.stringify({ type: "output", data: `▶️ Running ${language} code...\r\n` }));
-          }
+          // Direct execution - clean
           runCodeWithInput(config.cmd[0], config.args);
         }
         
