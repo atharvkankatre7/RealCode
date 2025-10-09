@@ -642,11 +642,12 @@ const languageConfig = {
   },
   csharp: {
     ext: 'cs',
-    cmd: ['dotnet', 'new', 'console', '--force'],
+    cmd: ['dotnet', 'new', 'console', '--force', '--name', 'TempApp'],
     args: [],
     runCmd: ['dotnet'],
     runArgs: ['run'],
-    requiresProject: true // C# needs a project structure
+    requiresProject: true, // C# needs a project structure
+    needsProjectSetup: true // Special handling for project-based languages
   },
   cpp: {
     ext: 'cpp',
@@ -984,14 +985,31 @@ terminalWss.on("connection", (ws) => {
           // Ultra-fast client-side execution - no progress message
           
           if (language === 'javascript') {
-            // Safe client-side JavaScript execution
+            // Safe client-side JavaScript execution with console.log support
             try {
+              // Capture console.log output
+              let output = '';
+              const originalConsoleLog = console.log;
+              console.log = (...args) => {
+                output += args.map(arg => String(arg)).join(' ') + '\r\n';
+              };
+              
+              // Execute the code
               const result = eval(code);
-              ws.send(JSON.stringify({ type: "output", data: String(result) + "\r\n" }));
+              
+              // Restore console.log
+              console.log = originalConsoleLog;
+              
+              // Send captured output or result
+              if (output) {
+                ws.send(JSON.stringify({ type: "output", data: output }));
+              } else if (result !== undefined) {
+                ws.send(JSON.stringify({ type: "output", data: String(result) + "\r\n" }));
+              }
             } catch (err) {
               ws.send(JSON.stringify({ type: "output", data: `Error: ${err.message}\r\n` }));
             }
-          } else if (language === 'python') {
+          }
             // Simulate simple Python print statements
             try {
               const printRegex = /print\(([^)]*)\)/g;
@@ -1137,6 +1155,81 @@ terminalWss.on("connection", (ws) => {
           } catch (err) {
             ws.send(JSON.stringify({ type: "output", data: `Error starting compilation: ${err.message}\r\n` }));
             try { fs.unlinkSync(filePath); } catch {}
+          }
+        } else if (language === 'csharp') {
+          // C# requires special project setup
+          try {
+            const projectDir = path.join(tempDir, `temp_csharp_${Date.now()}`);
+            fs.mkdirSync(projectDir, { recursive: true });
+            
+            // Create new console project
+            const createProcess = spawn('dotnet', ['new', 'console', '--force', '--name', 'TempApp'], {
+              cwd: projectDir,
+              stdio: ['pipe', 'pipe', 'pipe']
+            });
+            
+            createProcess.once('close', (createCode) => {
+              if (createCode !== 0) {
+                ws.send(JSON.stringify({ type: "output", data: 'Failed to create C# project\r\n' }));
+                try { fs.rmSync(projectDir, { recursive: true, force: true }); } catch {}
+                return;
+              }
+              
+              // Replace Program.cs with user code
+              const programFile = path.join(projectDir, 'TempApp', 'Program.cs');
+              try {
+                fs.writeFileSync(programFile, code);
+              } catch (writeErr) {
+                ws.send(JSON.stringify({ type: "output", data: `Error writing C# code: ${writeErr.message}\r\n` }));
+                try { fs.rmSync(projectDir, { recursive: true, force: true }); } catch {}
+                return;
+              }
+              
+              // Run the project
+              const runProcess = spawn('dotnet', ['run'], {
+                cwd: path.join(projectDir, 'TempApp'),
+                stdio: ['pipe', 'pipe', 'pipe'],
+                env: { ...process.env, DOTNET_CLI_TELEMETRY_OPTOUT: '1' }
+              });
+              
+              currentProcess = runProcess;
+              
+              // Handle process output
+              runProcess.stdout.on('data', (data) => {
+                const dataStr = data.toString();
+                // Filter out .NET welcome messages
+                if (!dataStr.includes('Welcome to .NET') && 
+                    !dataStr.includes('SDK Version') && 
+                    !dataStr.includes('Telemetry') &&
+                    !dataStr.includes('Learn about') &&
+                    !dataStr.includes('Find out what') &&
+                    !dataStr.includes('Explore documentation') &&
+                    !dataStr.includes('Report issues') &&
+                    !dataStr.includes('Use ') &&
+                    !dataStr.includes('---') &&
+                    dataStr.trim()) {
+                  ws.send(JSON.stringify({ type: "output", data: dataStr }));
+                }
+              });
+              
+              runProcess.stderr.on('data', (data) => {
+                ws.send(JSON.stringify({ type: "output", data: data.toString() }));
+              });
+              
+              runProcess.once('close', (runCode) => {
+                currentProcess = null;
+                try { fs.rmSync(projectDir, { recursive: true, force: true }); } catch {}
+              });
+              
+              runProcess.on('error', (err) => {
+                currentProcess = null;
+                ws.send(JSON.stringify({ type: "output", data: `C# execution error: ${err.message}\r\n` }));
+                try { fs.rmSync(projectDir, { recursive: true, force: true }); } catch {}
+              });
+            });
+            
+          } catch (err) {
+            ws.send(JSON.stringify({ type: "output", data: `C# setup error: ${err.message}\r\n` }));
           }
         } else {
           // Direct execution - clean
