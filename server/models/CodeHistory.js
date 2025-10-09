@@ -36,9 +36,15 @@ const codeHistorySchema = new mongoose.Schema({
 
 // Compound index for efficient queries and maintaining order
 codeHistorySchema.index({ userId: 1, createdAt: -1 });
-codeHistorySchema.index({ language: 1, updatedAt: -1 });
-// Text index for quick search across fields with language override disabled
-codeHistorySchema.index({ title: 'text', description: 'text', tags: 'text' }, { default_language: 'none' });
+codeHistorySchema.index({ userId: 1, updatedAt: -1 });
+// Text index for quick search across fields with language detection completely disabled
+codeHistorySchema.index(
+  { title: 'text', description: 'text', tags: 'text' }, 
+  { 
+    default_language: 'none',
+    language_override: 'none'
+  }
+);
 
 // Pre-save middleware to update the updatedAt field
 codeHistorySchema.pre('save', function(next) {
