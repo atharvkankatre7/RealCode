@@ -668,14 +668,16 @@ const languageConfig = {
     cmd: ['go'],
     args: ['run'],
     runCmd: ['go'],
-    runArgs: ['run']
+    runArgs: ['run'],
+    directExecution: true // Go runs directly without compilation step
   },
   rust: {
     ext: 'rs',
     cmd: ['rustc'],
     args: ['-o', isWindows ? 'temp.exe' : 'temp'],
-    runCmd: [isWindows ? './temp.exe' : './temp'],
-    runArgs: []
+    runCmd: [isWindows ? path.join('.', 'temp.exe') : './temp'],
+    runArgs: [],
+    needsCompilation: true // Rust needs compilation step
   }
 };
 
@@ -1121,7 +1123,45 @@ terminalWss.on("connection", (ws) => {
                 try { fs.unlinkSync(filePath); } catch {}
                 return;
               }
-              runCodeWithInput(config.runCmd[0], config.runArgs);
+              // For C++, run the compiled executable directly (without appending filePath)
+              const executablePath = path.join(tempDir, isWindows ? 'a.exe' : 'a.out');
+              
+              try {
+                const spawnOptions = {
+                  cwd: tempDir,
+                  stdio: ['pipe', 'pipe', 'pipe'],
+                  env: config.env || process.env
+                };
+                
+                currentProcess = spawn(executablePath, [], spawnOptions);
+                
+                currentProcess.on('error', (err) => {
+                  console.error('C++ executable error:', err.message);
+                  currentProcess = null;
+                  ws.send(JSON.stringify({ type: "output", data: `Execution error: ${err.message}\r\n` }));
+                });
+                
+                currentProcess.stdout.on('data', (data) => {
+                  ws.send(JSON.stringify({ type: "output", data: data.toString() }));
+                });
+                
+                currentProcess.stderr.on('data', (data) => {
+                  ws.send(JSON.stringify({ type: "output", data: data.toString() }));
+                });
+                
+                currentProcess.once('close', (code) => {
+                  currentProcess = null;
+                  // Clean up files
+                  try {
+                    fs.unlinkSync(filePath);
+                    fs.unlinkSync(executablePath);
+                  } catch (cleanupError) {
+                    console.error('Cleanup error:', cleanupError.message);
+                  }
+                });
+              } catch (err) {
+                ws.send(JSON.stringify({ type: "output", data: `Error running C++ executable: ${err.message}\r\n` }));
+              }
             });
           } catch (err) {
             ws.send(JSON.stringify({ type: "output", data: `Error starting compilation: ${err.message}\r\n` }));
@@ -1150,7 +1190,45 @@ terminalWss.on("connection", (ws) => {
                 try { fs.unlinkSync(filePath); } catch {}
                 return;
               }
-              runCodeWithInput(config.runCmd[0], config.runArgs);
+              // For Rust, run the compiled executable directly (without appending filePath)
+              const executablePath = path.join(tempDir, isWindows ? 'temp.exe' : 'temp');
+              
+              try {
+                const spawnOptions = {
+                  cwd: tempDir,
+                  stdio: ['pipe', 'pipe', 'pipe'],
+                  env: config.env || process.env
+                };
+                
+                currentProcess = spawn(executablePath, [], spawnOptions);
+                
+                currentProcess.on('error', (err) => {
+                  console.error('Rust executable error:', err.message);
+                  currentProcess = null;
+                  ws.send(JSON.stringify({ type: "output", data: `Execution error: ${err.message}\r\n` }));
+                });
+                
+                currentProcess.stdout.on('data', (data) => {
+                  ws.send(JSON.stringify({ type: "output", data: data.toString() }));
+                });
+                
+                currentProcess.stderr.on('data', (data) => {
+                  ws.send(JSON.stringify({ type: "output", data: data.toString() }));
+                });
+                
+                currentProcess.once('close', (code) => {
+                  currentProcess = null;
+                  // Clean up files
+                  try {
+                    fs.unlinkSync(filePath);
+                    fs.unlinkSync(executablePath);
+                  } catch (cleanupError) {
+                    console.error('Cleanup error:', cleanupError.message);
+                  }
+                });
+              } catch (err) {
+                ws.send(JSON.stringify({ type: "output", data: `Error running Rust executable: ${err.message}\r\n` }));
+              }
             });
           } catch (err) {
             ws.send(JSON.stringify({ type: "output", data: `Error starting compilation: ${err.message}\r\n` }));
@@ -1197,18 +1275,31 @@ terminalWss.on("connection", (ws) => {
               // Handle process output
               runProcess.stdout.on('data', (data) => {
                 const dataStr = data.toString();
-                // Filter out .NET welcome messages
-                if (!dataStr.includes('Welcome to .NET') && 
-                    !dataStr.includes('SDK Version') && 
-                    !dataStr.includes('Telemetry') &&
-                    !dataStr.includes('Learn about') &&
-                    !dataStr.includes('Find out what') &&
-                    !dataStr.includes('Explore documentation') &&
-                    !dataStr.includes('Report issues') &&
-                    !dataStr.includes('Use ') &&
-                    !dataStr.includes('---') &&
-                    dataStr.trim()) {
-                  ws.send(JSON.stringify({ type: "output", data: dataStr }));
+                // Filter out .NET system messages but preserve all program output
+                const lines = dataStr.split('\n');
+                const filteredLines = lines.filter(line => {
+                  const trimmedLine = line.trim();
+                  // Skip empty lines
+                  if (!trimmedLine) return false;
+                  
+                  // Filter out .NET system messages only
+                  const systemMessages = [
+                    'Welcome to .NET',
+                    'SDK Version',
+                    'Telemetry',
+                    'Learn about',
+                    'Find out what',
+                    'Explore documentation',
+                    'Report issues',
+                    'dotnet --help'
+                  ];
+                  
+                  // Keep the line if it doesn't contain any system messages
+                  return !systemMessages.some(msg => trimmedLine.includes(msg));
+                });
+                
+                if (filteredLines.length > 0) {
+                  ws.send(JSON.stringify({ type: "output", data: filteredLines.join('\n') + '\n' }));
                 }
               });
               
