@@ -1485,7 +1485,8 @@ const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({ roomId, usernam
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [socket, canEdit, latestCodeRef.current]);
+    // Remove latestCodeRef.current from dependencies to fix deprecation warning
+  }, [socket, canEdit]);
 
   // Manual save with Ctrl+S
   useEffect(() => {

@@ -93,6 +93,21 @@ class SocketService {
     return this._isConnected && !!this.socket?.connected;
   }
 
+  onConnect(callback: () => void): void {
+    if (this.isConnected()) {
+      callback();
+      return;
+    }
+    
+    if (this.socket) {
+      this.socket.once('connect', callback);
+    } else {
+      // If no socket, connect first then call callback
+      this.connect();
+      this.socket?.once('connect', callback);
+    }
+  }
+
   connect(): Socket {
     if (!this.socket) {
       console.log('🔌 Creating new socket connection...');

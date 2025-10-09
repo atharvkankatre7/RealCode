@@ -83,7 +83,7 @@ const RoomForm = () => {
     if (!validateUsername()) return
 
     if (!user) {
-      alert("You must be logged in to create a room.")
+      toast.error("You must be logged in to create a room. Please log in first.")
       return
     }
 
@@ -95,25 +95,41 @@ const RoomForm = () => {
       const roomIdToCreate = createRoomId.trim() || Math.random().toString(36).substring(2, 11)
       console.log("Creating room with ID:", roomIdToCreate)
 
-      // Make sure socket is connected (with timeout)
+      // Make sure socket is connected (with increased timeout and better error handling)
       if (!socketService.isConnected()) {
-        await Promise.race([
-          new Promise<void>(resolve => {
-            socketService.connect();
-            socketService.onConnect(() => resolve());
-          }),
-          new Promise<void>((_, reject) => {
-            setTimeout(() => reject(new Error('Socket connection timeout')), 10000);
-          })
-        ]);
+        console.log('Socket not connected, attempting to connect...');
+        try {
+          await Promise.race([
+            new Promise<void>((resolve, reject) => {
+              socketService.connect();
+              const checkConnection = () => {
+                if (socketService.isConnected()) {
+                  resolve();
+                } else {
+                  setTimeout(checkConnection, 100);
+                }
+              };
+              checkConnection();
+              // Fallback timeout
+              setTimeout(() => reject(new Error('Socket connection timeout')), 15000);
+            })
+          ]);
+          console.log('Socket connected successfully');
+        } catch (connectionError) {
+          console.error('Failed to connect to server:', connectionError);
+          toast.error('Failed to connect to server. Please check your internet connection and try again.');
+          setIsLoading(false)
+          return;
+        }
       }
 
       const { roomId: createdRoomId } = await socketService.createRoom(createUsername, roomIdToCreate)
       toast.success(`Created new room: ${createdRoomId}`)
       router.push(`/editor/${createdRoomId}`)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating room:", error)
-      toast.error("Failed to create room. Please try again.")
+      const errorMessage = error.message || "Failed to create room. Please try again."
+      toast.error(errorMessage)
       setIsLoading(false)
     }
   }
@@ -125,7 +141,7 @@ const RoomForm = () => {
       return
     }
     if (!user) {
-      alert("You must be logged in to join a room.")
+      toast.error("You must be logged in to join a room. Please log in first.")
       return
     }
     setIsLoading(true)
@@ -134,16 +150,33 @@ const RoomForm = () => {
     try {
       const roomIdToJoin = joinRoomId.trim()
       console.log("Joining room:", roomIdToJoin)
+      
+      // Make sure socket is connected (with better error handling)
       if (!socketService.isConnected()) {
-        await Promise.race([
-          new Promise<void>(resolve => {
-            socketService.connect();
-            socketService.onConnect(() => resolve());
-          }),
-          new Promise<void>((_, reject) => {
-            setTimeout(() => reject(new Error('Socket connection timeout')), 10000);
-          })
-        ]);
+        console.log('Socket not connected, attempting to connect...');
+        try {
+          await Promise.race([
+            new Promise<void>((resolve, reject) => {
+              socketService.connect();
+              const checkConnection = () => {
+                if (socketService.isConnected()) {
+                  resolve();
+                } else {
+                  setTimeout(checkConnection, 100);
+                }
+              };
+              checkConnection();
+              // Fallback timeout
+              setTimeout(() => reject(new Error('Socket connection timeout')), 15000);
+            })
+          ]);
+          console.log('Socket connected successfully');
+        } catch (connectionError) {
+          console.error('Failed to connect to server:', connectionError);
+          toast.error('Failed to connect to server. Please check your internet connection and try again.');
+          setIsLoading(false)
+          return;
+        }
       }
 
       const response = await socketService.validateRoom(roomIdToJoin)
@@ -154,9 +187,10 @@ const RoomForm = () => {
       }
 
       router.push(`/editor/${roomIdToJoin}`)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error joining room:", error)
-      toast.error("Failed to join room. Please check the Room ID and try again.")
+      const errorMessage = error.message || "Failed to join room. Please check the Room ID and try again."
+      toast.error(errorMessage)
       setIsLoading(false)
     }
   }
@@ -369,17 +403,32 @@ const RoomForm = () => {
 
         <div className="mt-2 flex justify-center">
           <motion.button
-            onClick={() => {
+            onClick={async () => {
+              if (!user) {
+                toast.error("You must be logged in to join a room. Please log in first.");
+                return;
+              }
               if (validateUsername()) {
                 setJoinRoomId(generatedRoomId);
-                joinRoom();
+                // Use the current username for joining
+                const usernameToUse = createUsername || joinUsername;
+                if (usernameToUse) {
+                  setJoinUsername(usernameToUse);
+                  localStorage.setItem("username", usernameToUse);
+                  router.push(`/editor/${generatedRoomId}`);
+                } else {
+                  toast.error("Please enter a username first");
+                }
               }
             }}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            disabled={isLoading}
+            className={`px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors ${
+              isLoading ? 'opacity-70 cursor-not-allowed' : ''
+            }`}
+            whileHover={{ scale: isLoading ? 1 : 1.05 }}
+            whileTap={{ scale: isLoading ? 1 : 0.95 }}
           >
-            Join This Room
+            {isLoading ? 'Joining...' : 'Join This Room'}
           </motion.button>
         </div>
 
