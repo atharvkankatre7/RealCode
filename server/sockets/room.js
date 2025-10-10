@@ -202,17 +202,45 @@ function getStudentList(roomId) {
   return room.studentList;
 }
 
-// Check if user is teacher
-function isTeacher(roomId, userId, _socketId) {
+// Check if user is teacher (enhanced with database fallback)
+async function isTeacher(roomId, userId, _socketId) {
   const room = rooms[roomId];
   if (!room) return false;
 
-  // Check by userId first (persistent), then by being the first user
-  if (room.teacherId === userId) return true;
+  // 1. Check by userId first (in-memory - fastest)
+  if (room.teacherId === userId) {
+    console.log(`🔑 [IS_TEACHER] User ${userId} is teacher (in-memory check)`);
+    return true;
+  }
 
-  // If no teacher set and this is the first user, make them teacher
+  // 2. Database fallback check for teacher persistence
+  try {
+    const dbRoom = await Room.findOne({ roomId });
+    if (dbRoom) {
+      // Check if user is room creator
+      if (dbRoom.createdBy === userId) {
+        // Update in-memory teacher ID
+        room.teacherId = userId;
+        console.log(`🔑 [IS_TEACHER] User ${userId} is teacher (database createdBy) - updated in-memory`);
+        return true;
+      }
+      // Check participants for teacher permission
+      const participant = dbRoom.participants.find(p => p.userId === userId && p.permissions === 'teacher');
+      if (participant) {
+        // Update in-memory teacher ID
+        room.teacherId = userId;
+        console.log(`🔑 [IS_TEACHER] User ${userId} is teacher (database participant) - updated in-memory`);
+        return true;
+      }
+    }
+  } catch (error) {
+    console.error(`⚠️ [IS_TEACHER] Database check failed for room ${roomId}:`, error);
+  }
+
+  // 3. Legacy fallback: If no teacher set and this is the first user, make them teacher
   if (!room.teacherId && room.users.length === 1) {
     room.teacherId = userId;
+    console.log(`🔑 [IS_TEACHER] User ${userId} became teacher (first user fallback)`);
     return true;
   }
 
@@ -300,7 +328,7 @@ function canEmitCodeChange(roomId, fileId) {
 
 export const registerRoomHandlers = (io, socket) => {
   // Create a new room
-  socket.on("create-room", ({ username, roomId: customRoomId, userId }, callback) => {
+  socket.on("create-room", async ({ username, roomId: customRoomId, userId }, callback) => {
     try {
       // Use exactly the username provided by the user without any modifications
       // This ensures we use exactly what the user entered on the dashboard
@@ -311,7 +339,29 @@ export const registerRoomHandlers = (io, socket) => {
 
       // Always use the provided room ID (which should be randomly generated on the client)
       const roomId = customRoomId || `${Math.random().toString(36).substring(2, 11)}`;
-      console.log(`${validUsername} (${validUserId}) creating room: ${roomId}`);
+      console.log(`${validUsername} (${validUserId}) attempting to create room: ${roomId}`);
+
+      // 🚨 CRITICAL: Check if room already exists (prevent duplicate creation)
+      if (rooms[roomId]) {
+        console.log(`❌ [CREATE-ROOM] Room ${roomId} already exists - cannot create`);
+        return callback({ 
+          error: "Room already exists! Please use a different room ID or join the existing room instead." 
+        });
+      }
+
+      // Check database for existing room as well
+      try {
+        const existingDbRoom = await Room.findOne({ roomId });
+        if (existingDbRoom) {
+          console.log(`❌ [CREATE-ROOM] Room ${roomId} exists in database - cannot create`);
+          return callback({ 
+            error: "Room already exists! Please use a different room ID or join the existing room instead." 
+          });
+        }
+      } catch (dbError) {
+        console.error(`⚠️ [CREATE-ROOM] Database check failed for room ${roomId}:`, dbError);
+        // Continue with creation since DB error shouldn't block room creation
+      }
 
       // Join the socket.io room
       socket.join(roomId);
@@ -319,47 +369,61 @@ export const registerRoomHandlers = (io, socket) => {
       // Initialize room and add user
       const room = getRoom(roomId);
 
-      // Set the teacher ID if not already set (room creator becomes the permanent teacher)
-      if (!room.teacherId) {
-        room.teacherId = validUserId;
-        console.log(`Set teacherId to ${validUserId} for room ${roomId}`);
-      }
+      // 🔑 CRITICAL: Set the teacher ID permanently (room creator becomes permanent teacher)
+      room.teacherId = validUserId;
+      console.log(`✅ [CREATE-ROOM] Set permanent teacherId to ${validUserId} for room ${roomId}`);
 
       // Check if user already exists in the room
       const existingUserIndex = room.users.findIndex((u) => u.userId === validUserId);
 
-      let role;
+      let role = "teacher"; // Room creator is always teacher
       if (existingUserIndex === -1) {
-        // For create-room, the user is always the teacher (room creator)
-        role = "teacher";
-
-        // Add user to the room with the assigned role
+        // Add user to the room with teacher role
         room.users.push({
           socketId: socket.id,
           username: validUsername,
           userId: validUserId,
-          role, // Add the role to the user object
+          role: "teacher",
         });
+        console.log(`✅ [CREATE-ROOM] Added ${validUsername} (${validUserId}) as teacher to new room ${roomId}`);
       } else {
         // Update existing user's socket ID and ensure they have teacher role
         room.users[existingUserIndex].socketId = socket.id;
-        room.users[existingUserIndex].role = "teacher"; // Ensure creator is teacher
-        role = "teacher";
+        room.users[existingUserIndex].role = "teacher";
+        console.log(`🔄 [CREATE-ROOM] Updated ${validUsername} (${validUserId}) as teacher in room ${roomId}`);
+      }
+
+      // 💾 CRITICAL: Store room creator as teacher in database
+      try {
+        const dbRoom = new Room({
+          roomId,
+          createdBy: validUserId,
+          participants: [{
+            userId: validUserId,
+            permissions: 'teacher',
+            joinedAt: new Date(),
+            lastActive: new Date()
+          }]
+        });
+        await dbRoom.save();
+        console.log(`💾 [CREATE-ROOM] Saved room ${roomId} to database with ${validUserId} as teacher`);
+      } catch (dbError) {
+        console.error(`⚠️ [CREATE-ROOM] Failed to save room to database:`, dbError);
+        // Continue even if DB save fails - room creation should not be blocked
       }
 
       // Store user info on the socket for easy access
       socket.username = validUsername;
       socket.userId = validUserId;
       socket.currentRoomId = roomId;
-      socket.role = role; // Store the role on the socket
+      socket.role = role;
 
-      console.log(`Set role to ${role} for ${validUsername} (${validUserId}) in room ${roomId}`);
+      console.log(`✅ [CREATE-ROOM] Room ${roomId} created successfully by ${validUsername} (${validUserId}) as permanent teacher`);
       // Send success response with room ID, username, and role
       callback({ roomId, username: validUsername, role, users: room.users });
-      console.log(`Room ${roomId} created by ${validUsername} (${validUserId})`);
       logRoomsState();
     } catch (error) {
-      console.error(`Error creating room:`, error);
+      console.error(`💥 [CREATE-ROOM] Error creating room:`, error);
       callback({ error: `Failed to create room: ${error.message}` });
     }
   })
@@ -399,14 +463,50 @@ export const registerRoomHandlers = (io, socket) => {
       const existingUserIndex = room.users.findIndex((u) => u.userId === validUserId);
       let userRole;
 
-      // Determine role based on whether this user is the teacher
-      const isTeacher = room.teacherId === validUserId;
+      // 🔑 CRITICAL: Enhanced teacher role determination
+      let isTeacher = false;
+      
+      // 1. Check in-memory room teacher ID (primary check)
+      if (room.teacherId === validUserId) {
+        isTeacher = true;
+        console.log(`🔑 [JOIN] User ${validUserId} is teacher based on in-memory teacherId`);
+      }
+      
+      // 2. Check database for persistent teacher role (fallback)
+      if (!isTeacher) {
+        try {
+          const dbRoom = await Room.findOne({ roomId });
+          if (dbRoom) {
+            // Check if user is the room creator
+            if (dbRoom.createdBy === validUserId) {
+              isTeacher = true;
+              // Update in-memory teacher ID to match database
+              room.teacherId = validUserId;
+              console.log(`🔑 [JOIN] User ${validUserId} is teacher based on database createdBy - updated in-memory`);
+            }
+            // Also check participants array for teacher permission
+            else {
+              const participant = dbRoom.participants.find(p => p.userId === validUserId);
+              if (participant && participant.permissions === 'teacher') {
+                isTeacher = true;
+                // Update in-memory teacher ID to match database
+                room.teacherId = validUserId;
+                console.log(`🔑 [JOIN] User ${validUserId} is teacher based on database participant permissions - updated in-memory`);
+              }
+            }
+          }
+        } catch (dbError) {
+          console.error(`⚠️ [JOIN] Database teacher check failed for room ${roomId}:`, dbError);
+          // Continue with in-memory check only
+        }
+      }
       
       console.log(`🔍 [JOIN] Role determination for ${validUsername} (${validUserId}):`, {
         roomTeacherId: room.teacherId,
         validUserId,
         isTeacher,
-        existingUserIndex
+        existingUserIndex,
+        determinedFromDb: room.teacherId === validUserId
       });
 
       if (existingUserIndex === -1) {
@@ -482,12 +582,54 @@ export const registerRoomHandlers = (io, socket) => {
         io.to(t.socketId).emit('update-student-list', { students: studentList });
       });
 
-      // Update room activity in database
+      // Update room activity in database and ensure teacher persistence
       try {
         const dbRoom = await Room.findOne({ roomId });
         if (dbRoom) {
           await dbRoom.updateActivity();
           await dbRoom.cancelCleanup(); // Cancel any scheduled cleanup when users rejoin
+          
+          // 🔑 CRITICAL: Ensure teacher role is persisted in database
+          if (isTeacher) {
+            let needsSave = false;
+            
+            // Update createdBy if not set
+            if (!dbRoom.createdBy || dbRoom.createdBy !== validUserId) {
+              dbRoom.createdBy = validUserId;
+              needsSave = true;
+              console.log(`🔑 [JOIN] Updated database createdBy to ${validUserId} for room ${roomId}`);
+            }
+            
+            // Ensure teacher is in participants with correct permissions
+            let teacherParticipant = dbRoom.participants.find(p => p.userId === validUserId);
+            if (!teacherParticipant) {
+              dbRoom.participants.push({
+                userId: validUserId,
+                permissions: 'teacher',
+                joinedAt: new Date(),
+                lastActive: new Date()
+              });
+              needsSave = true;
+              console.log(`🔑 [JOIN] Added teacher ${validUserId} to database participants for room ${roomId}`);
+            } else if (teacherParticipant.permissions !== 'teacher') {
+              teacherParticipant.permissions = 'teacher';
+              teacherParticipant.lastActive = new Date();
+              needsSave = true;
+              console.log(`🔑 [JOIN] Updated permissions to teacher for ${validUserId} in room ${roomId}`);
+            } else {
+              // Just update last active
+              teacherParticipant.lastActive = new Date();
+              needsSave = true;
+            }
+            
+            if (needsSave) {
+              await dbRoom.save();
+              console.log(`💾 [JOIN] Saved teacher persistence updates for room ${roomId}`);
+            }
+          } else {
+            // For students, just add/update participant record
+            await dbRoom.addParticipant(validUserId, 'student');
+          }
         }
       } catch (error) {
         console.error(`❌ Error updating room activity for ${roomId}:`, error);

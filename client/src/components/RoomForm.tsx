@@ -95,6 +95,51 @@ const RoomForm = () => {
       const roomIdToCreate = createRoomId.trim() || Math.random().toString(36).substring(2, 11)
       console.log("Creating room with ID:", roomIdToCreate)
 
+      // 🚨 CRITICAL: If user provided a custom room ID, check if it already exists
+      if (createRoomId.trim()) {
+        console.log('Custom room ID provided, checking if room exists...');
+        try {
+          const roomExists = await new Promise<boolean>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error('Room validation timeout'));
+            }, 10000);
+            
+            socketService.getSocket()?.emit('validate-room', { roomId: roomIdToCreate }, (response: { exists: boolean }) => {
+              clearTimeout(timeout);
+              resolve(response.exists);
+            });
+          });
+          
+          if (roomExists) {
+            toast.error(`Room "${roomIdToCreate}" already exists! Please use a different room ID or join the existing room instead.`);
+            setIsLoading(false);
+            return;
+          }
+          console.log('Room validation passed - room does not exist');
+        } catch (validationError) {
+          console.warn('Socket room validation failed, trying HTTP fallback:', validationError);
+          // Try HTTP fallback for room validation
+          try {
+            const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
+            const response = await fetch(`${API_URL}/api/validate-room/${roomIdToCreate}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data.exists) {
+                toast.error(`Room "${roomIdToCreate}" already exists! Please use a different room ID or join the existing room instead.`);
+                setIsLoading(false);
+                return;
+              }
+              console.log('HTTP room validation passed - room does not exist');
+            } else {
+              console.warn('HTTP room validation failed, proceeding with creation');
+            }
+          } catch (httpError) {
+            console.warn('HTTP room validation error, proceeding with creation:', httpError);
+            // Continue with creation if both validations fail
+          }
+        }
+      }
+
       // Make sure socket is connected (with increased timeout and better error handling)
       if (!socketService.isConnected()) {
         console.log('Socket not connected, attempting to connect...');

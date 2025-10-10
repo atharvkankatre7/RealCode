@@ -1611,6 +1611,38 @@ app.post('/api/user/preferences', async (req, res) => {
   }
 });
 
+// API: Validate if room exists
+app.get('/api/validate-room/:roomId', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    if (!roomId) {
+      return res.status(400).json({ error: 'Room ID is required' });
+    }
+    
+    // Check if room exists in memory or database
+    const { getRoom } = await import('./sockets/room.js');
+    const inMemoryRoom = getRoom(roomId);
+    const hasUsers = inMemoryRoom && inMemoryRoom.users && inMemoryRoom.users.length > 0;
+    
+    // Also check database
+    let dbRoomExists = false;
+    try {
+      const dbRoom = await Room.findOne({ roomId });
+      dbRoomExists = !!dbRoom;
+    } catch (dbError) {
+      console.error('Database check failed in room validation:', dbError);
+    }
+    
+    const exists = hasUsers || dbRoomExists;
+    console.log(`🔍 Room validation for ${roomId}: exists=${exists} (inMemory=${hasUsers}, database=${dbRoomExists})`);
+    
+    res.json({ exists, roomId });
+  } catch (error) {
+    console.error('Error validating room:', error);
+    res.status(500).json({ error: 'Failed to validate room' });
+  }
+});
+
 // Change the backend port from 5001 to 5002 to avoid EADDRINUSE error
 const PORT = process.env.PORT || 5002
 console.log(`🚀 Starting server on port ${PORT}...`);
