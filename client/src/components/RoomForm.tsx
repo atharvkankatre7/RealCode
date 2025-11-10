@@ -13,7 +13,8 @@ const RoomForm = () => {
   const [createRoomId, setCreateRoomId] = useState("")
   const [joinUsername, setJoinUsername] = useState("")
   const [joinRoomId, setJoinRoomId] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  const [creatingRoom, setCreatingRoom] = useState(false)
+  const [joiningRoom, setJoiningRoom] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
   const [generatedRoomId, setGeneratedRoomId] = useState("")
   const [activeTab, setActiveTab] = useState<'create' | 'join'>('create')
@@ -87,136 +88,100 @@ const RoomForm = () => {
       return
     }
 
-    setIsLoading(true)
+    setCreatingRoom(true)
     localStorage.setItem("username", createUsername)
     console.log(`Storing username in localStorage for create room: ${createUsername}`)
 
-    try {
-      const roomIdToCreate = createRoomId.trim() || Math.random().toString(36).substring(2, 11)
-      console.log("Creating room with ID:", roomIdToCreate)
+    const roomIdToCreate = createRoomId.trim() || Math.random().toString(36).substring(2, 11)
+    console.log("Creating room with ID:", roomIdToCreate)
 
-      // 🚨 CRITICAL: If user provided a custom room ID, check if it already exists
-      if (createRoomId.trim()) {
-        console.log('Custom room ID provided, checking if room exists...');
-        try {
-          const roomExists = await new Promise<boolean>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-              reject(new Error('Room validation timeout'));
-            }, 10000);
-            
-            socketService.getSocket()?.emit('validate-room', { roomId: roomIdToCreate }, (response: { exists: boolean }) => {
-              clearTimeout(timeout);
-              resolve(response.exists);
-            });
-          });
+    try {
+      // Ensure socket is connected before proceeding
+      if (!socketService.isConnected()) {
+        console.log('Socket not connected, waiting for connection...')
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Socket connection timeout'))
+          }, 10000)
           
-          if (roomExists) {
-            toast.error(`Room "${roomIdToCreate}" already exists! Please use a different room ID or join the existing room instead.`);
-            setIsLoading(false);
-            return;
+          socketService.onConnect(() => {
+            clearTimeout(timeout)
+            resolve()
+          })
+          
+          socketService.connect()
+        })
+      }
+
+      if (createRoomId.trim()) {
+        try {
+          const validation = await socketService.validateRoom(roomIdToCreate)
+          if (validation.exists) {
+            toast.error(`Room "${roomIdToCreate}" already exists! Please use a different room ID or join the existing room instead.`)
+            setCreatingRoom(false)
+            return
           }
-          console.log('Room validation passed - room does not exist');
         } catch (validationError) {
-          console.warn('Socket room validation failed, trying HTTP fallback:', validationError);
-          // Try HTTP fallback for room validation
+          console.warn('Socket validation failed, attempting HTTP fallback', validationError)
           try {
-            const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
-            const response = await fetch(`${API_URL}/api/validate-room/${roomIdToCreate}`);
+            const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002'
+            const response = await fetch(`${API_URL}/api/validate-room/${roomIdToCreate}`)
             if (response.ok) {
-              const data = await response.json();
+              const data = await response.json()
               if (data.exists) {
-                toast.error(`Room "${roomIdToCreate}" already exists! Please use a different room ID or join the existing room instead.`);
-                setIsLoading(false);
-                return;
+                toast.error(`Room "${roomIdToCreate}" already exists! Please use a different room ID or join the existing room instead.`)
+                setCreatingRoom(false)
+                return
               }
-              console.log('HTTP room validation passed - room does not exist');
-            } else {
-              console.warn('HTTP room validation failed, proceeding with creation');
             }
           } catch (httpError) {
-            console.warn('HTTP room validation error, proceeding with creation:', httpError);
-            // Continue with creation if both validations fail
+            console.warn('HTTP room validation error, continuing with creation:', httpError)
           }
         }
       }
 
-      // Make sure socket is connected (with increased timeout and better error handling)
-      if (!socketService.isConnected()) {
-        console.log('Socket not connected, attempting to connect...');
-        try {
-          await Promise.race([
-            new Promise<void>((resolve, reject) => {
-              socketService.connect();
-              const checkConnection = () => {
-                if (socketService.isConnected()) {
-                  resolve();
-                } else {
-                  setTimeout(checkConnection, 100);
-                }
-              };
-              checkConnection();
-              // Fallback timeout - increased for Render cold starts
-              setTimeout(() => reject(new Error('Socket connection timeout')), 30000);
-            })
-          ]);
-          console.log('Socket connected successfully');
-        } catch (connectionError) {
-          console.error('Failed to connect to server:', connectionError);
-          toast.error('Failed to connect to server. Please check your internet connection and try again.');
-          setIsLoading(false)
-          return;
-        }
+      const { roomId: createdRoomId, username: confirmedUsername } = await socketService.createRoom(createUsername, roomIdToCreate)
+      if (confirmedUsername && confirmedUsername !== createUsername) {
+        localStorage.setItem("username", confirmedUsername)
       }
-
-      const { roomId: createdRoomId } = await socketService.createRoom(createUsername, roomIdToCreate)
       toast.success(`Created new room: ${createdRoomId}`)
       router.push(`/editor/${createdRoomId}`)
     } catch (error: any) {
       console.error("Error creating room:", error)
-      
-      // If socket creation fails, try HTTP fallback
-      if (error.message?.includes('Socket') || error.message?.includes('connection')) {
-        try {
-          console.log('Socket creation failed, trying HTTP fallback...');
-          const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002';
-          
-          // Generate userId if not exists
-          let userId = localStorage.getItem('userId');
-          if (!userId) {
-            userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-            localStorage.setItem('userId', userId);
-          }
-          
-          const response = await fetch(`${API_URL}/api/create-room`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              username: createUsername,
-              roomId: roomIdToCreate,
-              userId: userId
-            })
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            toast.success(`Created new room: ${data.roomId}`);
-            router.push(`/editor/${data.roomId}`);
-            return;
-          } else {
-            throw new Error(`HTTP fallback failed: ${response.status}`);
-          }
-        } catch (fallbackError: any) {
-          console.error('HTTP fallback also failed:', fallbackError);
-          const errorMessage = "Failed to create room. Please check your internet connection and try again.";
-          toast.error(errorMessage);
+
+      try {
+        console.log('Attempting HTTP fallback for room creation...')
+        const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002'
+        let userId = localStorage.getItem('userId')
+        if (!userId) {
+          userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+          localStorage.setItem('userId', userId)
         }
-      } else {
-        const errorMessage = error.message || "Failed to create room. Please try again."
-        toast.error(errorMessage)
+
+        const response = await fetch(`${API_URL}/api/create-room`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: createUsername,
+            roomId: roomIdToCreate,
+            userId
+          })
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `HTTP fallback failed: ${response.status}`)
+        }
+
+        const data = await response.json()
+        toast.success(`Created new room: ${data.roomId}`)
+        router.push(`/editor/${data.roomId}`)
+      } catch (fallbackError: any) {
+        console.error('HTTP fallback also failed:', fallbackError)
+        toast.error(fallbackError.message || "Failed to create room. Please check your connection and try again.")
       }
-      setIsLoading(false)
+    } finally {
+      setCreatingRoom(false)
     }
   }
 
@@ -230,54 +195,67 @@ const RoomForm = () => {
       toast.error("You must be logged in to join a room. Please log in first.")
       return
     }
-    setIsLoading(true)
+
+    setJoiningRoom(true)
     localStorage.setItem("username", joinUsername)
     console.log(`Storing username in localStorage for join room: ${joinUsername}`)
+
+    const roomIdToJoin = joinRoomId.trim()
+    console.log("Joining room:", roomIdToJoin)
+
     try {
-      const roomIdToJoin = joinRoomId.trim()
-      console.log("Joining room:", roomIdToJoin)
-      
-      // Make sure socket is connected (with better error handling)
+      // Ensure socket is connected before proceeding
       if (!socketService.isConnected()) {
-        console.log('Socket not connected, attempting to connect...');
+        console.log('Socket not connected, waiting for connection...')
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Socket connection timeout'))
+          }, 10000)
+          
+          socketService.onConnect(() => {
+            clearTimeout(timeout)
+            resolve()
+          })
+          
+          socketService.connect()
+        })
+      }
+
+      try {
+        const validation = await socketService.validateRoom(roomIdToJoin)
+        if (!validation.exists) {
+          toast.error("Room does not exist. Please check the Room ID and try again.")
+          setJoiningRoom(false)
+          return
+        }
+      } catch (validationError) {
+        console.warn('Socket validation failed, attempting HTTP fallback', validationError)
         try {
-          await Promise.race([
-            new Promise<void>((resolve, reject) => {
-              socketService.connect();
-              const checkConnection = () => {
-                if (socketService.isConnected()) {
-                  resolve();
-                } else {
-                  setTimeout(checkConnection, 100);
-                }
-              };
-              checkConnection();
-              // Fallback timeout - increased for Render cold starts
-              setTimeout(() => reject(new Error('Socket connection timeout')), 30000);
-            })
-          ]);
-          console.log('Socket connected successfully');
-        } catch (connectionError) {
-          console.error('Failed to connect to server:', connectionError);
-          toast.error('Failed to connect to server. Please check your internet connection and try again.');
-          setIsLoading(false)
-          return;
+          const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5002'
+          const response = await fetch(`${API_URL}/api/validate-room/${roomIdToJoin}`)
+          if (response.ok) {
+            const data = await response.json()
+            if (!data.exists) {
+              toast.error("Room does not exist. Please check the Room ID and try again.")
+              setJoiningRoom(false)
+              return
+            }
+          }
+        } catch (httpError) {
+          console.warn('HTTP validation also failed, continuing with join attempt:', httpError)
         }
       }
 
-      const response = await socketService.validateRoom(roomIdToJoin)
-      if (!response.exists) {
-        toast.error("Room does not exist. Please check the Room ID and try again.")
-        setIsLoading(false)
-        return
-      }
+      // Attempt to join via socket for immediate feedback; fallback handled inside service if needed
+      await socketService.joinRoom(roomIdToJoin, joinUsername)
 
+      toast.success(`Successfully joined room: ${roomIdToJoin}`)
       router.push(`/editor/${roomIdToJoin}`)
     } catch (error: any) {
       console.error("Error joining room:", error)
-      const errorMessage = error.message || "Failed to join room. Please check the Room ID and try again."
-      toast.error(errorMessage)
-      setIsLoading(false)
+      toast.error(error.message || "Failed to join room. Please check the Room ID and try again.")
+    } finally {
+      setJoiningRoom(false)
     }
   }
 
@@ -363,12 +341,12 @@ const RoomForm = () => {
 
             <motion.button
               onClick={createRoom}
-              disabled={isLoading}
-              className={`w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
-              whileHover={{ scale: isLoading ? 1 : 1.02, boxShadow: isLoading ? 'none' : "0 10px 25px -5px rgba(59, 130, 246, 0.5)" }}
-              whileTap={{ scale: isLoading ? 1 : 0.98 }}
+              disabled={creatingRoom}
+              className={`w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${creatingRoom ? 'opacity-70 cursor-not-allowed' : ''}`}
+              whileHover={{ scale: creatingRoom ? 1 : 1.02, boxShadow: creatingRoom ? 'none' : "0 10px 25px -5px rgba(59, 130, 246, 0.5)" }}
+              whileTap={{ scale: creatingRoom ? 1 : 0.98 }}
             >
-              {isLoading ? (
+              {creatingRoom ? (
                 <>
                   <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -426,12 +404,12 @@ const RoomForm = () => {
 
             <motion.button
               onClick={joinRoom}
-              disabled={isLoading}
-              className={`w-full py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
-              whileHover={{ scale: isLoading ? 1 : 1.02, boxShadow: isLoading ? 'none' : "0 10px 25px -5px rgba(34, 197, 94, 0.5)" }}
-              whileTap={{ scale: isLoading ? 1 : 0.98 }}
+              disabled={joiningRoom}
+              className={`w-full py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${joiningRoom ? 'opacity-70 cursor-not-allowed' : ''}`}
+              whileHover={{ scale: joiningRoom ? 1 : 1.02, boxShadow: joiningRoom ? 'none' : "0 10px 25px -5px rgba(34, 197, 94, 0.5)" }}
+              whileTap={{ scale: joiningRoom ? 1 : 0.98 }}
             >
-              {isLoading ? (
+              {joiningRoom ? (
                 <>
                   <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -501,20 +479,29 @@ const RoomForm = () => {
                 if (usernameToUse) {
                   setJoinUsername(usernameToUse);
                   localStorage.setItem("username", usernameToUse);
-                  router.push(`/editor/${generatedRoomId}`);
+                  setJoiningRoom(true);
+                  try {
+                    await socketService.joinRoom(generatedRoomId, usernameToUse);
+                    router.push(`/editor/${generatedRoomId}`);
+                  } catch (error: any) {
+                    console.error("Error joining room:", error);
+                    toast.error(error.message || "Failed to join room. Please check the Room ID and try again.");
+                  } finally {
+                    setJoiningRoom(false);
+                  }
                 } else {
                   toast.error("Please enter a username first");
                 }
               }
             }}
-            disabled={isLoading}
+            disabled={joiningRoom}
             className={`px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors ${
-              isLoading ? 'opacity-70 cursor-not-allowed' : ''
+              joiningRoom ? 'opacity-70 cursor-not-allowed' : ''
             }`}
-            whileHover={{ scale: isLoading ? 1 : 1.05 }}
-            whileTap={{ scale: isLoading ? 1 : 0.95 }}
+            whileHover={{ scale: joiningRoom ? 1 : 1.05 }}
+            whileTap={{ scale: joiningRoom ? 1 : 0.95 }}
           >
-            {isLoading ? 'Joining...' : 'Join This Room'}
+            {joiningRoom ? 'Joining...' : 'Join This Room'}
           </motion.button>
         </div>
 

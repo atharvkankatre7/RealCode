@@ -16,6 +16,7 @@ import TerminalPanel from "@/components/TerminalPanel";
 import { LanguageProvider, useLanguage } from '@/context/LanguageContext';
 import CodeHistoryPanel from "@/components/CodeHistoryPanel";
 import IndividualUserPermissionPanel from "@/components/IndividualUserPermissionPanel";
+import { toast } from "react-hot-toast";
 
 // Dynamic import for CodeEditor to avoid SSR issues
 const CodeEditor = dynamic(() => import("@/components/CodeEditor"), {
@@ -214,9 +215,39 @@ return (
     {/* Left: App/Room Name - Mobile Optimized */}
     <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1 overflow-hidden">
         <h1 className="text-base sm:text-lg font-semibold text-white truncate tracking-tight">RealCode</h1>
-        <div className="hidden xs:block bg-cyan-500/10 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-medium text-cyan-300 border border-cyan-500/20 truncate">
-          <span className="hidden sm:inline">Room: </span>{roomId.length > 8 ? roomId.substring(0, 8) + '...' : roomId}
-        </div>
+        {/* Room Code Display with Copy Button */}
+        <Popover
+          trigger={
+            <button className="flex items-center gap-1.5 sm:gap-2 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-medium text-cyan-300 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200 group">
+              <span className="hidden sm:inline">Room: </span>
+              <span className="font-mono">{roomId.length > 8 ? roomId.substring(0, 8) + '...' : roomId}</span>
+              <FiCopy className="w-3 h-3 sm:w-3.5 sm:h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+          }
+        >
+          <div className="bg-zinc-900/95 backdrop-blur-sm rounded-xl shadow-xl border border-white/5 p-4 min-w-[280px]">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white">Room Code</h3>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(roomId).then(() => {
+                    toast.success("Room code copied to clipboard!");
+                  }).catch(() => {
+                    toast.error("Failed to copy room code");
+                  });
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 rounded-lg transition-all duration-200 text-xs font-medium border border-cyan-500/30"
+              >
+                <FiCopy className="w-3.5 h-3.5" />
+                Copy
+              </button>
+            </div>
+            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/50">
+              <code className="text-cyan-300 font-mono text-sm break-all select-all">{roomId}</code>
+            </div>
+            <p className="text-xs text-zinc-400 mt-2">Share this code with others to join your room</p>
+          </div>
+        </Popover>
     </div>
     {/* Key Actions: Mobile Optimized Layout */}
     <div className="flex items-center gap-1.5 sm:gap-3 ml-auto overflow-x-auto no-scrollbar">

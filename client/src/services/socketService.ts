@@ -73,6 +73,7 @@ class SocketService {
   private socket: Socket | null = null;
   private _isConnected: boolean = false;
   private listeners: Map<string, Function[]> = new Map();
+  private pendingConnectionPromise: Promise<Socket> | null = null;
 
   private constructor() {
     // Private constructor to enforce singleton
@@ -127,6 +128,7 @@ class SocketService {
       } as any); // Type assertion to allow custom Socket.IO options
 
       this.setupSocketEventHandlers();
+      this._isConnected = false;
     } else if (!this.socket.connected) {
       console.log('Socket exists but not connected, attempting to reconnect...');
       try {
@@ -165,6 +167,68 @@ class SocketService {
       this.socket = null;
       this._isConnected = false;
     }
+  }
+
+  private ensureSocketInstance(): Socket {
+    if (!this.socket) {
+      this.connect();
+    }
+    if (!this.socket) {
+      throw new Error('Socket not initialized');
+    }
+    return this.socket;
+  }
+
+  private async waitForConnection(timeout = 30000): Promise<Socket> {
+    if (this.isConnected() && this.socket) {
+      return this.socket;
+    }
+
+    const socket = this.ensureSocketInstance();
+
+    if (this.pendingConnectionPromise) {
+      return this.pendingConnectionPromise;
+    }
+
+    this.pendingConnectionPromise = new Promise<Socket>((resolve, reject) => {
+      const cleanup = () => {
+        socket.off('connect', onConnect);
+        socket.off('connect_error', onError);
+        socket.off('error', onError);
+        if (timer) {
+          clearTimeout(timer);
+        }
+      };
+
+      const onConnect = () => {
+        cleanup();
+        resolve(socket);
+      };
+
+      const onError = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error('Socket connection timeout'));
+      }, timeout);
+
+      if (socket.connected) {
+        cleanup();
+        resolve(socket);
+        return;
+      }
+
+      socket.once('connect', onConnect);
+      socket.once('connect_error', onError);
+      socket.once('error', onError);
+    }).finally(() => {
+      this.pendingConnectionPromise = null;
+    });
+
+    return this.pendingConnectionPromise;
   }
 
   // Keepalive mechanism to prevent connection timeouts
@@ -431,50 +495,50 @@ class SocketService {
   // Create a new room with retry logic
   public createRoom(username: string, roomId?: string): Promise<{ roomId: string, username: string }> {
     return new Promise((resolve, reject) => {
-      if (!this.socket || !this.isConnected()) {
-        return reject(new Error('Socket not connected'));
-      }
-
-      // Generate a unique userId if not already stored
-      let userId = typeof window !== 'undefined' ? window.localStorage.getItem('userId') : null;
-      if (!userId) {
-        userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('userId', userId);
-        }
-      }
-
-      let isResolved = false;
-      
-      // Set timeout for the socket emission
-      const timeoutId = setTimeout(() => {
-        if (!isResolved) {
-          isResolved = true;
-          reject(new Error('Room creation timeout - server did not respond in time'));
-        }
-      }, 30000); // 30 second timeout for Render cold starts
-      
-      this.socket.emit('create-room', { username, roomId, userId }, (response: { roomId: string; username?: string; role?: string; users?: Array<{ socketId: string; username: string; userId?: string; role: string }>; error?: string }) => {
-        clearTimeout(timeoutId);
-        if (isResolved) return; // Already timed out
-        isResolved = true;
-        
-        if (response.error) {
-          reject(new Error(response.error));
-        } else {
-          // If the server validated and possibly changed the username, update it locally
-          if (response.username && response.username !== username) {
+      this.waitForConnection()
+        .then((socket) => {
+          // Generate a unique userId if not already stored
+          let userId = typeof window !== 'undefined' ? window.localStorage.getItem('userId') : null;
+          if (!userId) {
+            userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
             if (typeof window !== 'undefined') {
-              window.localStorage.setItem('username', response.username);
+              window.localStorage.setItem('userId', userId);
             }
           }
 
-          resolve({
-            roomId: response.roomId,
-            username: response.username || username
+          let isResolved = false;
+          
+          // Set timeout for the socket emission
+          const timeoutId = setTimeout(() => {
+            if (!isResolved) {
+              isResolved = true;
+              reject(new Error('Room creation timeout - server did not respond in time'));
+            }
+          }, 30000); // 30 second timeout for Render cold starts
+          
+          socket.emit('create-room', { username, roomId, userId }, (response: { roomId: string; username?: string; role?: string; users?: Array<{ socketId: string; username: string; userId?: string; role: string }>; error?: string }) => {
+            clearTimeout(timeoutId);
+            if (isResolved) return; // Already timed out
+            isResolved = true;
+            
+            if (response.error) {
+              reject(new Error(response.error));
+            } else {
+              // If the server validated and possibly changed the username, update it locally
+              if (response.username && response.username !== username) {
+                if (typeof window !== 'undefined') {
+                  window.localStorage.setItem('username', response.username);
+                }
+              }
+
+              resolve({
+                roomId: response.roomId,
+                username: response.username || username
+              });
+            }
           });
-        }
-      });
+        })
+        .catch((error) => reject(error));
     });
   }
 
@@ -493,113 +557,58 @@ class SocketService {
             window.localStorage.setItem('userId', userId);
           }
         }
-      } else {
-        // Store provided userId in localStorage for persistence
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('userId', userId);
-        }
+      } else if (typeof window !== 'undefined') {
+        window.localStorage.setItem('userId', userId);
       }
 
-      // Check if we have a socket connection
-      if (!this.socket || !this.isConnected()) {
-        // Try to connect
-        this.connect();
-
-        // Wait a bit to see if connection succeeds
-        await new Promise(r => setTimeout(r, 2000));
-
-        // If still not connected, use HTTP fallback
-        if (!this.isConnected()) {
-          return this.joinRoomViaHttp(roomId, username, userId, resolve, reject);
+      const fallbackToHttp = async (reason?: Error) => {
+        try {
+          const result = await this.joinRoomViaHttp(roomId, username, userId);
+          resolve(result);
+        } catch (httpError) {
+          reject(httpError instanceof Error ? httpError : reason || new Error('Unable to join room'));
         }
-      }
+      };
 
-      // If we reach here, we have a socket connection, so use it
       try {
-        if (!this.socket) {
-          throw new Error('Socket is null');
-        }
-        // Emit join-room with userId, username, and roomId
-        this.socket.emit('join-room', { roomId, username, userId }, (response: {
+        const socket = await this.waitForConnection();
+
+        let isSettled = false;
+        const settle = () => { isSettled = true; };
+
+        const timeoutId = setTimeout(() => {
+          if (!isSettled) {
+            settle();
+            fallbackToHttp(new Error('Socket join timeout'));
+          }
+        }, 10000);
+
+        socket.emit('join-room', { roomId, username, userId }, async (response: {
           error?: string;
           success?: boolean;
           users?: Array<{ socketId: string; username: string; userId?: string; role: string }>;
           username?: string;
           role?: string;
         }) => {
+          if (isSettled) return;
+          settle();
+          clearTimeout(timeoutId);
+
           if (response.error) {
-          // If socket join fails, try HTTP fallback
-          this.joinRoomViaHttp(roomId, username, userId, resolve, reject);
-        } else if (response.success) {
-            // If the server validated and possibly changed the username, update it locally
-            if (response.username && response.username !== username) {
-              if (typeof window !== 'undefined') {
-                window.localStorage.setItem('username', response.username);
-              }
-            }
-
-            // Mark the current user in the users list
-            const usersWithCurrentFlag = (response.users || []).map((user: { userId?: string; username: string; socketId: string }) => ({
-              ...user,
-              userId: user.userId || '',
-              isCurrentUser: (user.userId || '') === userId
-            }));
-
-            resolve({
-              users: usersWithCurrentFlag || [],
-              username: response.username || username,
-              role: response.role
-            });
-          } else {
-            // If socket join fails, try HTTP fallback
-            this.joinRoomViaHttp(roomId, username, userId, resolve, reject);
+            return fallbackToHttp(new Error(response.error));
           }
-        });
 
-        // Set a timeout in case the callback never fires
-        setTimeout(() => {
-          // If we haven't resolved or rejected yet, try HTTP fallback
-          this.joinRoomViaHttp(roomId, username, userId, resolve, reject);
-        }, 5000);
-      } catch (error) {
-        // If socket join throws an exception, try HTTP fallback
-        this.joinRoomViaHttp(roomId, username, userId, resolve, reject);
-      }
-    });
-  }
+          if (!response.success) {
+            return fallbackToHttp(new Error('Unable to join room via socket'));
+          }
 
-  // HTTP fallback for joining a room when socket fails
-  private joinRoomViaHttp(
-    roomId: string,
-    username: string,
-    userId: string,
-    resolve: (value: { users: Array<{ userId: string, username: string, isCurrentUser: boolean }>, username: string, role?: string }) => void,
-    reject: (reason: Error) => void
-  ) {
-    // Use axios to make a direct HTTP request to the server
-    const apiUrl = `${SOCKET_URL}/api/join-room`;
-
-    axios.post(apiUrl, { roomId, username, userId })
-      .then(response => {
-        if (response.data.error) {
-          reject(new Error(response.data.error));
-        } else {
-          // If the server validated and possibly changed the username, update it locally
-          if (response.data.username && response.data.username !== username) {
+          if (response.username && response.username !== username) {
             if (typeof window !== 'undefined') {
-              window.localStorage.setItem('username', response.data.username);
+              window.localStorage.setItem('username', response.username);
             }
           }
 
-          // Create a default user list with at least the current user
-          const users = response.data.users || [{
-            userId,
-            username: response.data.username || username,
-            socketId: 'http-fallback'
-          }];
-
-          // Fix: When mapping users, always provide a fallback for userId (empty string if undefined)
-          const usersWithCurrentFlag = users.map((user: { userId?: string; username: string; socketId: string }) => ({
+          const usersWithCurrentFlag = (response.users || []).map((user: { userId?: string; username: string; socketId: string }) => ({
             ...user,
             userId: user.userId || '',
             isCurrentUser: (user.userId || '') === userId
@@ -607,32 +616,63 @@ class SocketService {
 
           resolve({
             users: usersWithCurrentFlag,
-            username: response.data.username || username,
-            role: response.data.role
+            username: response.username || username,
+            role: response.role
           });
-
-          // Try to reconnect socket after successful HTTP fallback
-          setTimeout(() => this.connect(), 1000);
-        }
-      })
-      .catch(error => {
-        // If HTTP fallback also fails, create a minimal response with just the current user
-        const fallbackUser = {
-          userId,
-          username,
-          isCurrentUser: true
-        };
-
-        // Resolve with just the current user to allow the UI to function
-        resolve({
-          users: [fallbackUser],
-          username,
-          role: 'student' // Default role for fallback
         });
+      } catch (error) {
+        fallbackToHttp(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
 
-        // Try to reconnect socket after error
-        setTimeout(() => this.connect(), 2000);
-      });
+  // HTTP fallback for joining a room when socket fails
+  private async joinRoomViaHttp(
+    roomId: string,
+    username: string,
+    userId: string
+  ): Promise<{ users: Array<{ userId: string, username: string, isCurrentUser: boolean }>, username: string, role?: string }> {
+    const apiUrl = `${SOCKET_URL}/api/join-room`;
+
+    try {
+      const response = await axios.post(apiUrl, { roomId, username, userId });
+
+      if (response.data.error) {
+        throw new Error(response.data.error);
+      }
+
+      if (response.data.username && response.data.username !== username) {
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('username', response.data.username);
+        }
+        username = response.data.username;
+      }
+
+      const users = response.data.users || [{
+        userId,
+        username,
+        socketId: 'http-fallback'
+      }];
+
+      const usersWithCurrentFlag = users.map((user: { userId?: string; username: string; socketId: string }) => ({
+        ...user,
+        userId: user.userId || '',
+        isCurrentUser: (user.userId || '') === userId
+      }));
+
+      // Attempt to reconnect socket in background
+      setTimeout(() => this.connect(), 1000);
+
+      return {
+        users: usersWithCurrentFlag,
+        username,
+        role: response.data.role
+      };
+    } catch (error) {
+      // Attempt reconnection for future tries
+      setTimeout(() => this.connect(), 2000);
+      throw error instanceof Error ? error : new Error(String(error));
+    }
   }
 
   // Send code changes to the server with HTTP fallback
@@ -937,13 +977,6 @@ class SocketService {
     });
   }
 
-  onConnect(callback: () => void): void {
-    if (!this.socket) {
-      throw new Error('Socket is not initialized');
-    }
-    this.socket.on('connect', callback);
-  }
-
   leaveRoom(roomId: string): void {
     if (!this.socket) {
       throw new Error('Socket is not initialized');
@@ -977,19 +1010,19 @@ class SocketService {
   // Validate if a room exists
   public validateRoom(roomId: string): Promise<{ exists: boolean }> {
     return new Promise((resolve, reject) => {
-      if (!this.socket || !this.isConnected()) {
-        return reject(new Error('Socket not connected'));
-      }
-
-      try {
-        this.socket.emit('validate-room', { roomId }, (response: { exists: boolean }) => {
-          console.log(`Room validation result for ${roomId}:`, response);
-          resolve(response);
-        });
-      } catch (error) {
-        console.error('Error validating room:', error);
-        reject(error);
-      }
+      this.waitForConnection()
+        .then((socket) => {
+          try {
+            socket.emit('validate-room', { roomId }, (response: { exists: boolean }) => {
+              console.log(`Room validation result for ${roomId}:`, response);
+              resolve(response);
+            });
+          } catch (error) {
+            console.error('Error validating room:', error);
+            reject(error);
+          }
+        })
+        .catch(reject);
     });
   }
 

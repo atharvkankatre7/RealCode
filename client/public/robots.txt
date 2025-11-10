@@ -1,0 +1,15 @@
+# robots.txt for RealCode
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /_next/
+Disallow: /editor/*/api
+Disallow: /socket.io/
+
+# Sitemap
+Sitemap: https://realcode.app/sitemap.xml
+
+# Crawl-delay for respectful crawling
+Crawl-delay: 1
+
